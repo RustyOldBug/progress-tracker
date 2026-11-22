@@ -153,7 +153,7 @@ export default function Gym() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-muted">Scheduled for this day</p>
-            <p className="font-display text-2xl font-bold">{PLAN_LABELS[plan] ?? routineLabel(plan, data.routines)}</p>
+            <p className="font-display text-2xl font-bold">{plan === 'rest' ? PLAN_LABELS.rest : routineLabel(plan, data.routines)}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-muted">Sessions this week</p>

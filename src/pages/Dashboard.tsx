@@ -108,7 +108,7 @@ export default function Dashboard() {
           : `${routineLabel(workout.workoutType, data.routines, workout.routineName)} planned`
     : plan === 'rest'
       ? 'Rest day'
-      : `${PLAN_LABELS[plan] ?? routineLabel(plan, data.routines)} not started`;
+      : `${plan === 'rest' ? PLAN_LABELS.rest : routineLabel(plan, data.routines)} not started`;
   const periodLength = Number(trendPeriod);
   const periodEnd = trendDate;
   const periodStart = addDays(periodEnd, -(periodLength - 1));
