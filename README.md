@@ -16,9 +16,9 @@ Needs Node 18 or newer (Node 20 recommended).
 
 ## Deploy to GitHub Pages (free)
 
-1. Create a GitHub repository and push this folder to its `main` branch.
+1. Push this folder and its `.github/workflows/deploy.yml` file to the repository's `main` branch.
 2. In the repository go to **Settings → Pages**. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-3. The workflow in `.github/workflows/deploy.yml` runs on every push to `main`. When it finishes, the site is at
+3. The workflow builds with Node.js 20 and deploys on every push to `main`. You can also start it manually from **Actions → Deploy to GitHub Pages → Run workflow**. When it finishes, the site is at
    `https://<your-username>.github.io/<repository-name>/`.
 4. Open that address on your phone and choose **Add to Home Screen** (or **Install app** in Chrome) to use it like an app.
 
