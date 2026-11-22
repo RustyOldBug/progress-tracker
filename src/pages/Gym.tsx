@@ -5,7 +5,8 @@ import { Button, Card, CardTitle, DateNav, EmptyState, Field, IconButton, Input,
 import { lastPerformance, weekDates } from '../lib/calc';
 import { addDays, formatLong, formatMedium, weekdayOf } from '../lib/dates';
 import { newExercises, uid } from '../lib/schema';
-import { PLAN_LABELS, SESSION_LABELS } from '../constants';
+import { PLAN_LABELS, routineLabel } from '../constants';
+import WorkoutProgressChart from '../components/WorkoutProgressChart';
 import type { ExerciseLog, SessionType, WorkoutRecord, WorkoutStatus } from '../types';
 
 const STATUS_STYLE: Record<WorkoutStatus, string> = {
@@ -22,15 +23,17 @@ const toNum = (v: string): number | null => {
 };
 
 export default function Gym() {
-  const { data, selectedDate: date, setSelectedDate, saveWorkout, deleteWorkout, rescheduleWorkout } = useStore();
+  const { data, selectedDate: date, setSelectedDate, saveWorkout, updateWorkout, deleteWorkout, rescheduleWorkout } = useStore();
   const confirm = useConfirm();
   const { profile } = data;
-  const plan = profile.schedule[weekdayOf(date)];
-  const record = data.workouts.find((w) => w.date === date);
   const [newType, setNewType] = useState<SessionType | ''>('');
   const [moveTo, setMoveTo] = useState('');
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const plan = profile.schedule[weekdayOf(date)];
+  const selectedType = newType || (plan === 'rest' ? data.routines[0]?.id ?? '' : plan);
+  const selectedRoutine = data.routines.find((routine) => routine.id === selectedType);
+  const record = data.workouts.find((w) => w.date === date);
 
   const weekSet = new Set(weekDates(date));
   const weekDone = data.workouts.filter((w) => weekSet.has(w.date) && w.status === 'completed').length;
@@ -38,13 +41,24 @@ export default function Gym() {
   const history = [...data.workouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
 
   const create = () => {
-    const type: SessionType = newType || (plan === 'rest' ? 'upper-a' : plan);
-    saveWorkout({ id: uid(), date, workoutType: type, exercises: newExercises(type), duration: null, status: 'planned', notes: '' });
+    if (!selectedType) return;
+    const type: SessionType = selectedType;
+    saveWorkout({
+      id: uid(),
+      date,
+      workoutType: type,
+      routineName: routineLabel(type, data.routines),
+      exercises: newExercises(selectedRoutine?.exercises ?? []),
+      duration: null,
+      status: 'planned',
+      notes: '',
+    });
   };
 
-  const patch = (p: Partial<WorkoutRecord>) => record && saveWorkout({ ...record, ...p });
+  const patch = (p: Partial<WorkoutRecord> | ((workout: WorkoutRecord) => Partial<WorkoutRecord>)) =>
+    record && updateWorkout(record.id, (workout) => ({ ...workout, ...(typeof p === 'function' ? p(workout) : p) }));
   const patchExercise = (id: string, fn: (e: ExerciseLog) => ExerciseLog) =>
-    record && patch({ exercises: record.exercises.map((e) => (e.id === id ? fn(e) : e)) });
+    patch((workout) => ({ exercises: workout.exercises.map((e) => (e.id === id ? fn(e) : e)) }));
 
   const complete = () => {
     if (!record) return;
@@ -67,7 +81,7 @@ export default function Gym() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-muted">Scheduled for this day</p>
-            <p className="font-display text-2xl font-bold">{PLAN_LABELS[plan]}</p>
+            <p className="font-display text-2xl font-bold">{PLAN_LABELS[plan] ?? routineLabel(plan, data.routines)}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-muted">Sessions this week</p>
@@ -85,12 +99,13 @@ export default function Gym() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-full sm:w-56">
               <Field label="Session type">
-                <Select value={newType || (plan === 'rest' ? 'upper-a' : plan)} onChange={(e) => setNewType(e.target.value as SessionType)}>
-                  {(Object.keys(SESSION_LABELS) as SessionType[]).map((t) => <option key={t} value={t}>{SESSION_LABELS[t]}</option>)}
+                <Select value={selectedType} onChange={(e) => setNewType(e.target.value as SessionType)}>
+                  <option value="recovery">Active recovery</option>
+                  {data.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
                 </Select>
               </Field>
             </div>
-            <Button variant="primary" onClick={create}><Plus size={18} /> {plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
+            <Button variant="primary" onClick={create} disabled={!selectedType}><Plus size={18} /> {plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
           </div>
         </Card>
       ) : (
@@ -99,7 +114,7 @@ export default function Gym() {
             <CardTitle
               right={<span className={cx('rounded-full px-3 py-1 text-sm font-medium', STATUS_STYLE[record.status])}>{record.status === 'rescheduled' && record.rescheduledTo ? `Moved to ${formatMedium(record.rescheduledTo)}` : record.status[0].toUpperCase() + record.status.slice(1)}</span>}
             >
-              {SESSION_LABELS[record.workoutType]}
+              {routineLabel(record.workoutType, data.routines, record.routineName)}
             </CardTitle>
             <div className="flex flex-wrap gap-2">
               {record.status === 'planned' && (
@@ -140,7 +155,7 @@ export default function Gym() {
                   <div key={ex.id} className="rounded-xl border border-line p-3">
                     <div className="flex items-center gap-2">
                       <Input value={ex.name} onChange={(e) => patchExercise(ex.id, (x) => ({ ...x, name: e.target.value }))} aria-label="Exercise name" className="font-medium" />
-                      <IconButton label={`Remove ${ex.name}`} onClick={() => patch({ exercises: record.exercises.filter((e) => e.id !== ex.id) })}><Trash2 size={18} /></IconButton>
+                      <IconButton label={`Remove ${ex.name}`} onClick={() => patch((workout) => ({ exercises: workout.exercises.filter((e) => e.id !== ex.id) }))}><Trash2 size={18} /></IconButton>
                     </div>
                     {last && <p className="mt-1 text-xs text-muted">Last time: {last}</p>}
                     <div className="mt-2 space-y-2">
@@ -159,7 +174,7 @@ export default function Gym() {
                 );
               })}
             </div>
-            <Button className="mt-4" onClick={() => patch({ exercises: [...record.exercises, { id: uid(), name: '', sets: [{ reps: null, weight: null }] }] })}><Plus size={18} /> Add exercise</Button>
+            <Button className="mt-4" onClick={() => patch((workout) => ({ exercises: [...workout.exercises, { id: uid(), name: '', sets: [{ reps: null, weight: null }] }] }))}><Plus size={18} /> Add exercise</Button>
           </Card>
 
           <Card>
@@ -187,7 +202,7 @@ export default function Gym() {
               <li key={w.id}>
                 <button type="button" onClick={() => setSelectedDate(w.date)} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
                   <span>
-                    <span className="block font-medium">{SESSION_LABELS[w.workoutType]}</span>
+                    <span className="block font-medium">{routineLabel(w.workoutType, data.routines, w.routineName)}</span>
                     <span className="block text-sm text-muted">{formatMedium(w.date)}{w.duration ? ` · ${w.duration} min` : ''}</span>
                   </span>
                   <span className={cx('rounded-full px-3 py-1 text-xs font-medium', STATUS_STYLE[w.status])}>{w.status}</span>
@@ -196,6 +211,11 @@ export default function Gym() {
             ))}
           </ul>
         )}
+      </Card>
+
+      <Card>
+        <CardTitle>Exercise progress</CardTitle>
+        <WorkoutProgressChart workouts={data.workouts} />
       </Card>
     </div>
   );

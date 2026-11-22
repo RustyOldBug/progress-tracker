@@ -10,6 +10,7 @@ const counts = (d: AppData) => ({
   'Food entries': d.foods.length,
   'Daily records': Object.keys(d.daily).length,
   Workouts: d.workouts.length,
+  'Workout routines': d.routines.length,
 });
 
 type Pending = { name: string; createdAt: string; schemaVersion: number; data: AppData };
@@ -49,7 +50,7 @@ export default function Backup() {
   const reportText = (r: MergeReport) => {
     const a = r.added;
     const s = r.skipped;
-    return `Merged. Added ${a.weights} weights, ${a.foods} foods, ${a.daily} daily records and ${a.workouts} workouts. Skipped ${s.weights + s.foods + s.daily + s.workouts} records that already existed.`;
+    return `Merged. Added ${a.weights} weights, ${a.foods} foods, ${a.daily} daily records, ${a.workouts} workouts and ${a.routines} routines. Skipped ${s.weights + s.foods + s.daily + s.workouts + s.routines} records that already existed.`;
   };
 
   const doImport = () => {

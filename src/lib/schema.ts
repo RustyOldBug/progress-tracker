@@ -6,12 +6,13 @@ import type {
   FoodEntry,
   UserProfile,
   WeightEntry,
+  WorkoutRoutine,
   WorkoutRecord,
 } from '../types';
-import { CHECKLIST_ITEMS, defaultProfile, MEALS, WORKOUT_TEMPLATES } from '../constants';
+import { CHECKLIST_ITEMS, DEFAULT_ROUTINES, defaultProfile, MEALS, SESSION_LABELS } from '../constants';
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -47,6 +48,7 @@ export function defaultData(): AppData {
     foods: [],
     daily: {},
     workouts: [],
+    routines: DEFAULT_ROUTINES.map((routine) => ({ ...routine, exercises: [...routine.exercises] })),
     lastBackupAt: null,
   };
 }
@@ -55,8 +57,7 @@ const num = (v: unknown, fallback: number | null = null) =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 
-export function newExercises(type: string): ExerciseLog[] {
-  const names = type in WORKOUT_TEMPLATES ? WORKOUT_TEMPLATES[type as keyof typeof WORKOUT_TEMPLATES] : [];
+export function newExercises(names: string[]): ExerciseLog[] {
   return names.map((name) => ({
     id: uid(),
     name,
@@ -77,8 +78,29 @@ export function migrate(raw: unknown): AppData {
   if (!isObj(raw)) return base;
   // const version = num(raw.schemaVersion, 0);  // v0 → v1 needs no changes. Add steps here later.
 
+  const routines: WorkoutRoutine[] = Array.isArray(raw.routines)
+    ? raw.routines
+        .filter(isObj)
+        .filter((r) => typeof r.id === 'string' && typeof r.name === 'string' && Array.isArray(r.exercises))
+        .map((r) => ({
+          id: r.id as string,
+          name: (r.name as string).trim(),
+          exercises: (r.exercises as unknown[]).filter((name): name is string => typeof name === 'string'),
+        }))
+        .filter((r) => r.id.length > 0 && r.name.length > 0)
+        .filter((routine, index, all) => all.findIndex((other) => other.id === routine.id) === index)
+    : base.routines;
+  const routineIds = new Set(routines.map((routine) => routine.id));
   const profile = (isObj(raw.profile) ? { ...base.profile, ...raw.profile } : base.profile) as unknown as UserProfile;
-  if (!Array.isArray(profile.schedule) || profile.schedule.length !== 7) profile.schedule = base.profile.schedule;
+  if (!Array.isArray(profile.schedule) || profile.schedule.length !== 7) {
+    profile.schedule = [...base.profile.schedule];
+  } else {
+    profile.schedule = profile.schedule.map((plan) =>
+      plan === 'rest' || plan === 'recovery' || (typeof plan === 'string' && routineIds.has(plan))
+        ? plan
+        : 'rest'
+    );
+  }
 
   const daily: Record<string, DailyRecord> = {};
   if (isObj(raw.daily)) {
@@ -111,20 +133,28 @@ export function migrate(raw: unknown): AppData {
     protein: num(f.protein, 0) as number,
   }));
 
-  const workouts: WorkoutRecord[] = (Array.isArray(raw.workouts) ? raw.workouts : []).filter(isObj).map((w) => ({
-    id: str(w.id) || uid(),
-    date: str(w.date),
-    workoutType: w.workoutType as WorkoutRecord['workoutType'],
-    exercises: (Array.isArray(w.exercises) ? w.exercises : []).filter(isObj).map((e) => ({
-      id: str(e.id) || uid(),
-      name: str(e.name),
-      sets: (Array.isArray(e.sets) ? e.sets : []).filter(isObj).map((s) => ({ reps: num(s.reps), weight: num(s.weight) })),
-    })),
-    duration: num(w.duration),
-    status: w.status as WorkoutRecord['status'],
-    rescheduledTo: typeof w.rescheduledTo === 'string' ? w.rescheduledTo : undefined,
-    notes: str(w.notes),
-  }));
+  const workouts: WorkoutRecord[] = (Array.isArray(raw.workouts) ? raw.workouts : []).filter(isObj).map((w) => {
+    const workoutType = str(w.workoutType);
+    return {
+      id: str(w.id) || uid(),
+      date: str(w.date),
+      workoutType,
+      routineName:
+        str(w.routineName) ||
+        routines.find((routine) => routine.id === workoutType)?.name ||
+        SESSION_LABELS[workoutType] ||
+        workoutType,
+      exercises: (Array.isArray(w.exercises) ? w.exercises : []).filter(isObj).map((e) => ({
+        id: str(e.id) || uid(),
+        name: str(e.name),
+        sets: (Array.isArray(e.sets) ? e.sets : []).filter(isObj).map((s) => ({ reps: num(s.reps), weight: num(s.weight) })),
+      })),
+      duration: num(w.duration),
+      status: w.status as WorkoutRecord['status'],
+      rescheduledTo: typeof w.rescheduledTo === 'string' ? w.rescheduledTo : undefined,
+      notes: str(w.notes),
+    };
+  });
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -133,6 +163,7 @@ export function migrate(raw: unknown): AppData {
     foods,
     daily,
     workouts,
+    routines,
     lastBackupAt: typeof raw.lastBackupAt === 'string' ? raw.lastBackupAt : null,
   };
 }

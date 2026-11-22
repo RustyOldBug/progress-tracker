@@ -21,6 +21,23 @@ export function addDays(iso: string, n: number): string {
   return toISO(d);
 }
 
+export function addMonths(iso: string, n: number): string {
+  const d = parseISO(iso);
+  d.setDate(1);
+  d.setMonth(d.getMonth() + n);
+  return toISO(d);
+}
+
+export function startOfMonth(iso: string): string {
+  const d = parseISO(iso);
+  return toISO(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+export function endOfMonth(iso: string): string {
+  const d = parseISO(iso);
+  return toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
 export const weekdayOf = (iso: string) => parseISO(iso).getDay();
 
 /** Monday of the week containing `iso`. */

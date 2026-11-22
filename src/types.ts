@@ -1,4 +1,4 @@
-export type WorkoutType = 'upper-a' | 'lower-a' | 'upper-b' | 'lower-b';
+export type WorkoutType = string;
 export type SessionType = WorkoutType | 'recovery';
 export type DayPlan = SessionType | 'rest';
 export type MealType = 'Breakfast' | 'Lunch' | 'Snacks' | 'Dinner';
@@ -31,6 +31,12 @@ export interface UserProfile {
   startDate: string;
   /** Index 0 = Sunday ... 6 = Saturday */
   schedule: DayPlan[];
+}
+
+export interface WorkoutRoutine {
+  id: WorkoutType;
+  name: string;
+  exercises: string[];
 }
 
 export interface WeightEntry {
@@ -74,6 +80,7 @@ export interface WorkoutRecord {
   id: string;
   date: string;
   workoutType: SessionType;
+  routineName?: string;
   exercises: ExerciseLog[];
   duration: number | null;
   status: WorkoutStatus;
@@ -88,5 +95,6 @@ export interface AppData {
   foods: FoodEntry[];
   daily: Record<string, DailyRecord>;
   workouts: WorkoutRecord[];
+  routines: WorkoutRoutine[];
   lastBackupAt: string | null;
 }

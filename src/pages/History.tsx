@@ -5,7 +5,7 @@ import { checkedCount, completionPct, dayTotals } from '../lib/calc';
 import { formatMedium } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { navigate } from '../lib/router';
-import { CHECKLIST_ITEMS, SESSION_LABELS } from '../constants';
+import { CHECKLIST_ITEMS, routineLabel } from '../constants';
 
 export default function HistoryPage() {
   const { data, setSelectedDate } = useStore();
@@ -62,7 +62,7 @@ export default function HistoryPage() {
                         ['Protein', t.count ? `${fmt(t.protein)} g` : '–'],
                         ['Steps', r?.steps != null ? fmt(r.steps) : '–'],
                         ['Water', r && r.water > 0 ? `${fmt(r.water / 1000, 2)} L` : '–'],
-                        ['Gym', g ? `${SESSION_LABELS[g.workoutType]} (${g.status})` : '–'],
+                        ['Gym', g ? `${routineLabel(g.workoutType, data.routines, g.routineName)} (${g.status})` : '–'],
                       ].map(([k, v]) => (
                         <div key={k}>
                           <dt className="text-muted">{k}</dt>

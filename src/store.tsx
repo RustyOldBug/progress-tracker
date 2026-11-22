@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { AppData, ChecklistKey, DailyRecord, FoodEntry, UserProfile, WeightEntry, WorkoutRecord } from './types';
+import type { AppData, ChecklistKey, DailyRecord, FoodEntry, UserProfile, WeightEntry, WorkoutRecord, WorkoutRoutine } from './types';
 import { defaultProfile } from './constants';
 import { todayISO, addDays } from './lib/dates';
 import { defaultData, emptyDaily, migrate, uid } from './lib/schema';
@@ -43,6 +43,7 @@ interface Store {
   selectedDate: string;
   setSelectedDate: (d: string) => void;
   setProfile: (p: UserProfile) => void;
+  setRoutines: (routines: WorkoutRoutine[]) => void;
   resetProfile: () => void;
   saveWeight: (e: NewWeight) => void;
   deleteWeight: (id: string) => void;
@@ -53,6 +54,7 @@ interface Store {
   toggleCheck: (date: string, key: ChecklistKey) => void;
   addWater: (date: string, ml: number) => void;
   saveWorkout: (w: WorkoutRecord) => void;
+  updateWorkout: (id: string, update: (workout: WorkoutRecord) => WorkoutRecord) => void;
   deleteWorkout: (id: string) => void;
   rescheduleWorkout: (id: string, newDate: string) => void;
   replaceAll: (incoming: AppData) => void;
@@ -111,6 +113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     selectedDate,
     setSelectedDate,
     setProfile: (profile) => setData((d) => ({ ...d, profile })),
+    setRoutines: (routines) => setData((d) => ({ ...d, routines })),
     resetProfile: () => setData((d) => ({ ...d, profile: { ...defaultProfile(), startDate: d.profile.startDate } })),
     saveWeight: (e) =>
       setData((d) => {
@@ -126,6 +129,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateDaily(date, (r) => ({ ...r, checklist: { ...r.checklist, [key]: !r.checklist[key] } })),
     addWater: (date, ml) => updateDaily(date, (r) => ({ ...r, water: Math.max(0, r.water + ml) })),
     saveWorkout: (w) => setData((d) => ({ ...d, workouts: upsertById(d.workouts, w) })),
+    updateWorkout: (id, update) =>
+      setData((d) => {
+        const workout = d.workouts.find((item) => item.id === id);
+        return workout
+          ? { ...d, workouts: d.workouts.map((item) => item.id === id ? update(workout) : item) }
+          : d;
+      }),
     deleteWorkout: (id) => setData((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) })),
     rescheduleWorkout: (id, newDate) =>
       setData((d) => {
@@ -140,6 +150,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               id: uid(),
               date: newDate,
               workoutType: w.workoutType,
+              routineName: w.routineName,
               exercises: w.exercises.map((e) => ({
                 id: uid(),
                 name: e.name,

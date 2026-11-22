@@ -1,14 +1,19 @@
 import { useState, type FormEvent } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, Field, Input, Message, PageHeader, Select, useConfirm } from '../components/ui';
 import { isValidISO, WEEKDAY_NAMES } from '../lib/dates';
 import { setMode, useThemeMode, type ThemeMode } from '../lib/theme';
-import { defaultProfile, PLAN_LABELS } from '../constants';
-import type { DayPlan, UserProfile } from '../types';
+import { DEFAULT_ROUTINES, defaultProfile } from '../constants';
+import { uid } from '../lib/schema';
+import type { DayPlan, UserProfile, WorkoutRoutine } from '../types';
 
-type Draft = Record<Exclude<keyof UserProfile, 'schedule'>, string> & { schedule: DayPlan[] };
+type Draft = Record<Exclude<keyof UserProfile, 'schedule'>, string> & {
+  schedule: DayPlan[];
+  routines: WorkoutRoutine[];
+};
 
-const toDraft = (p: UserProfile): Draft => ({
+const toDraft = (p: UserProfile, routines: WorkoutRoutine[]): Draft => ({
   name: p.name,
   age: String(p.age),
   gender: p.gender,
@@ -24,6 +29,7 @@ const toDraft = (p: UserProfile): Draft => ({
   waterTargetMl: String(p.waterTargetMl / 1000),
   startDate: p.startDate,
   schedule: [...p.schedule],
+  routines: routines.map((routine) => ({ ...routine, exercises: [...routine.exercises] })),
 });
 
 const RANGES: [keyof Draft, string, number, number][] = [
@@ -41,10 +47,10 @@ const RANGES: [keyof Draft, string, number, number][] = [
 ];
 
 export default function SettingsPage() {
-  const { data, setProfile, resetProfile } = useStore();
+  const { data, setProfile, setRoutines, resetProfile } = useStore();
   const confirm = useConfirm();
   const theme = useThemeMode();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(data.profile));
+  const [draft, setDraft] = useState<Draft>(() => toDraft(data.profile, data.routines));
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -65,8 +71,16 @@ export default function SettingsPage() {
     if (nums.targetWeight != null && nums.startingWeight != null && nums.targetWeight >= nums.startingWeight)
       errs.push('Target weight must be lower than starting weight.');
     if (!isValidISO(draft.startDate)) errs.push('Start date must be a valid date.');
+    const routineNames = draft.routines.map((routine) => routine.name.trim().toLocaleLowerCase());
+    if (draft.routines.some((routine) => !routine.name.trim())) errs.push('Every workout routine needs a name.');
+    if (new Set(routineNames).size !== routineNames.length) errs.push('Workout routine names must be unique.');
     setErrors(errs);
     if (errs.length) return setSaved(false);
+    const routines = draft.routines.map((routine) => ({
+      ...routine,
+      name: routine.name.trim(),
+      exercises: routine.exercises.map((exercise) => exercise.trim()).filter(Boolean),
+    }));
     setProfile({
       name: draft.name.trim(),
       gender: draft.gender,
@@ -84,16 +98,33 @@ export default function SettingsPage() {
       bmr: nums.bmr,
       tdee: nums.tdee,
     });
+    setRoutines(routines);
     setSaved(true);
   };
 
   const reset = async () => {
     if (await confirm({ title: 'Reset settings to defaults?', message: 'Targets, profile values and the weekly gym schedule go back to the original values. Your logged data is not affected.', confirmLabel: 'Reset settings', danger: true })) {
       resetProfile();
-      setDraft(toDraft({ ...defaultProfile(), startDate: data.profile.startDate }));
+      setRoutines(DEFAULT_ROUTINES.map((routine) => ({ ...routine, exercises: [...routine.exercises] })));
+      setDraft(toDraft({ ...defaultProfile(), startDate: data.profile.startDate }, DEFAULT_ROUTINES));
       setErrors([]);
       setSaved(true);
     }
+  };
+
+  const removeRoutine = async (routine: WorkoutRoutine) => {
+    if (!await confirm({
+      title: `Delete ${routine.name}?`,
+      message: 'Scheduled days using this routine will become rest days. Existing workout history will be kept.',
+      confirmLabel: 'Delete routine',
+      danger: true,
+    })) return;
+    setDraft((current) => ({
+      ...current,
+      routines: current.routines.filter((item) => item.id !== routine.id),
+      schedule: current.schedule.map((plan) => plan === routine.id ? 'rest' : plan),
+    }));
+    setSaved(false);
   };
 
   return (
@@ -145,10 +176,107 @@ export default function SettingsPage() {
                   setSaved(false);
                 }}
               >
-                {(Object.keys(PLAN_LABELS) as DayPlan[]).map((p) => <option key={p} value={p}>{PLAN_LABELS[p]}</option>)}
+                <option value="rest">Rest</option>
+                <option value="recovery">Active recovery</option>
+                {draft.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
               </Select>
             </Field>
           ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle right={
+          <Button
+            onClick={() => {
+              const id = `custom-${uid()}`;
+              setDraft((current) => ({
+                ...current,
+                routines: [...current.routines, { id, name: '', exercises: [] }],
+              }));
+              setSaved(false);
+            }}
+          >
+            <Plus size={16} /> Add routine
+          </Button>
+        }>Workout routines</CardTitle>
+        <p className="mb-4 text-sm text-muted">Create reusable workout types and choose their starting exercises. You can still edit exercises in each workout.</p>
+        <div className="space-y-4">
+          {draft.routines.map((routine) => (
+            <section key={routine.id} className="rounded-xl border border-line p-3">
+              <div className="flex items-end gap-2">
+                <Field label="Routine name">
+                  <Input
+                    value={routine.name}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setDraft((current) => ({
+                        ...current,
+                        routines: current.routines.map((item) => item.id === routine.id ? { ...item, name } : item),
+                      }));
+                      setSaved(false);
+                    }}
+                    placeholder="e.g. Push day"
+                  />
+                </Field>
+                <Button variant="ghost" aria-label={`Delete ${routine.name || 'unnamed routine'}`} onClick={() => removeRoutine(routine)}>
+                  <Trash2 size={18} />
+                </Button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {routine.exercises.map((exercise, index) => (
+                  <div key={`${routine.id}-${index}`} className="flex items-center gap-2">
+                    <Input
+                      aria-label={`${routine.name || 'Routine'} exercise ${index + 1}`}
+                      value={exercise}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setDraft((current) => ({
+                          ...current,
+                          routines: current.routines.map((item) => item.id === routine.id
+                            ? { ...item, exercises: item.exercises.map((value, i) => i === index ? name : value) }
+                            : item),
+                        }));
+                        setSaved(false);
+                      }}
+                      placeholder="Exercise name"
+                    />
+                    <Button
+                      variant="ghost"
+                      aria-label={`Remove ${exercise || `exercise ${index + 1}`}`}
+                      onClick={() => {
+                        setDraft((current) => ({
+                          ...current,
+                          routines: current.routines.map((item) => item.id === routine.id
+                            ? { ...item, exercises: item.exercises.filter((_, i) => i !== index) }
+                            : item),
+                        }));
+                        setSaved(false);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                className="mt-2"
+                onClick={() => {
+                  setDraft((current) => ({
+                    ...current,
+                    routines: current.routines.map((item) => item.id === routine.id
+                      ? { ...item, exercises: [...item.exercises, ''] }
+                      : item),
+                  }));
+                  setSaved(false);
+                }}
+              >
+                <Plus size={16} /> Add exercise
+              </Button>
+            </section>
+          ))}
+          {draft.routines.length === 0 && <p className="text-sm text-muted">No workout routines yet. Add one to schedule training days.</p>}
         </div>
       </Card>
 

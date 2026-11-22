@@ -55,6 +55,7 @@ Storage is versioned (`schemaVersion` in `src/lib/schema.ts`). When the data sha
 - Current weight is the latest weigh-in. Total lost = starting − current. Remaining = current − target.
 - Progress = (starting − current) ÷ (starting − target) × 100, kept between 0 and 100.
 - Weekly weight change compares this week's average weight with last week's (weeks run Monday to Sunday).
+- Gym exercise trends use completed workouts and show best logged weight, total reps, or volume (weight × reps).
 - Averages use only days that have data. A day with no food logged is never counted as 0 kcal.
 - Daily checklist completion = ticked items ÷ 8.
 

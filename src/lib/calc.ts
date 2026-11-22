@@ -69,31 +69,59 @@ export function trendSeries(sorted: WeightEntry[]) {
 
 export function weeklyOverview(data: AppData, anyIso: string) {
   const dates = weekDates(anyIso);
-  const set = new Set(dates);
+  const overview = periodOverview(data, dates[0], dates[6], addDays(dates[0], -7), addDays(dates[0], -1));
+  return {
+    calories: overview.calories,
+    protein: overview.protein,
+    steps: overview.steps,
+    gym: overview.gym,
+    weightChange: overview.weightChange,
+    checklist: overview.checklist,
+    foodDays: overview.foodDays,
+    checkDays: overview.checkDays,
+  };
+}
+
+export function periodOverview(data: AppData, start: string, end: string, previousStart: string, previousEnd: string) {
+  const dates: string[] = [];
+  for (let date = start; date <= end; date = addDays(date, 1)) dates.push(date);
+  const dateSet = new Set(dates);
   const cals: number[] = [];
-  const prots: number[] = [];
+  const proteins: number[] = [];
   const steps: number[] = [];
+  const waters: number[] = [];
   const checks: number[] = [];
-  for (const d of dates) {
-    const t = dayTotals(data.foods, d);
-    if (t.count > 0) {
-      cals.push(t.calories);
-      prots.push(t.protein);
+
+  for (const date of dates) {
+    const totals = dayTotals(data.foods, date);
+    if (totals.count) {
+      cals.push(totals.calories);
+      proteins.push(totals.protein);
     }
-    const r = data.daily[d];
-    if (r) {
-      if (r.steps != null) steps.push(r.steps);
-      checks.push(completionPct(r));
+    const daily = data.daily[date];
+    if (daily) {
+      if (daily.steps != null) steps.push(daily.steps);
+      if (daily.water > 0) waters.push(daily.water / 1000);
+      checks.push(completionPct(daily));
     }
   }
+
+  const currentWeight = avg(data.weights.filter((entry) => dateSet.has(entry.date)).map((entry) => entry.weight));
+  const previousWeight = avg(data.weights
+    .filter((entry) => entry.date >= previousStart && entry.date <= previousEnd)
+    .map((entry) => entry.weight));
+
   return {
     calories: avg(cals),
-    protein: avg(prots),
+    protein: avg(proteins),
     steps: avg(steps),
-    gym: data.workouts.filter((w) => set.has(w.date) && w.status === 'completed').length,
-    weightChange: weeklyWeightChange(data.weights, dates[0]),
+    water: avg(waters),
+    gym: data.workouts.filter((workout) => dateSet.has(workout.date) && workout.status === 'completed').length,
+    weightChange: currentWeight != null && previousWeight != null ? currentWeight - previousWeight : null,
     checklist: avg(checks),
     foodDays: cals.length,
+    stepDays: steps.length,
+    waterDays: waters.length,
     checkDays: checks.length,
   };
 }

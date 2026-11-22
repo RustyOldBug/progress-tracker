@@ -1,7 +1,7 @@
 import type { AppData } from '../types';
 import { isValidISO, todayISO } from './dates';
 import { isObj, migrate, SCHEMA_VERSION } from './schema';
-import { MEALS } from '../constants';
+import { DEFAULT_ROUTINES, MEALS } from '../constants';
 
 export const APP_ID = 'weight-loss-tracker';
 
@@ -23,6 +23,7 @@ export function buildBackup(data: AppData): BackupFile {
       foods: data.foods,
       daily: data.daily,
       workouts: data.workouts,
+      routines: data.routines,
     },
   };
 }
@@ -76,12 +77,30 @@ function validateData(d: Record<string, unknown>): string | null {
     if (r.steps != null && !finite(r.steps)) return `Daily record "${date}" has invalid steps.`;
     if (r.water != null && !finite(r.water)) return `Daily record "${date}" has invalid water.`;
   }
+  const routines = d.routines ?? DEFAULT_ROUTINES;
+  if (!Array.isArray(routines)) return 'The backup has no workout routines list.';
+  const routineIds = new Set<string>();
+  for (const [i, routine] of routines.entries()) {
+    if (
+      !isObj(routine) ||
+      typeof routine.id !== 'string' ||
+      !routine.id.trim() ||
+      typeof routine.name !== 'string' ||
+      !routine.name.trim() ||
+      !Array.isArray(routine.exercises) ||
+      !routine.exercises.every((exercise) => typeof exercise === 'string')
+    )
+      return `Workout routine ${i + 1} is invalid.`;
+    if (routineIds.has(routine.id)) return `Workout routine "${routine.id}" is duplicated.`;
+    routineIds.add(routine.id);
+  }
   if (!Array.isArray(d.workouts)) return 'The backup has no workouts list.';
   for (const [i, w] of d.workouts.entries()) {
     if (
       !isObj(w) ||
       !isValidISO(w.date) ||
-      !SESSION_TYPES.includes(w.workoutType as string) ||
+      typeof w.workoutType !== 'string' ||
+      (!SESSION_TYPES.includes(w.workoutType) && !routineIds.has(w.workoutType)) ||
       !STATUSES.includes(w.status as string) ||
       !Array.isArray(w.exercises)
     )
@@ -117,8 +136,8 @@ export function parseBackup(text: string): ParseResult {
 }
 
 export interface MergeReport {
-  added: { weights: number; foods: number; daily: number; workouts: number };
-  skipped: { weights: number; foods: number; daily: number; workouts: number };
+  added: { weights: number; foods: number; daily: number; workouts: number; routines: number };
+  skipped: { weights: number; foods: number; daily: number; workouts: number; routines: number };
 }
 
 /**
@@ -128,8 +147,8 @@ export interface MergeReport {
  */
 export function mergeData(cur: AppData, inc: AppData): { merged: AppData; report: MergeReport } {
   const report: MergeReport = {
-    added: { weights: 0, foods: 0, daily: 0, workouts: 0 },
-    skipped: { weights: 0, foods: 0, daily: 0, workouts: 0 },
+    added: { weights: 0, foods: 0, daily: 0, workouts: 0, routines: 0 },
+    skipped: { weights: 0, foods: 0, daily: 0, workouts: 0, routines: 0 },
   };
 
   const weightDates = new Set(cur.weights.map((w) => w.date));
@@ -175,5 +194,16 @@ export function mergeData(cur: AppData, inc: AppData): { merged: AppData; report
     }
   }
 
-  return { merged: { ...cur, weights, foods, daily, workouts }, report };
+  const routineIds = new Set(cur.routines.map((routine) => routine.id));
+  const routines = [...cur.routines];
+  for (const routine of inc.routines) {
+    if (routineIds.has(routine.id)) report.skipped.routines++;
+    else {
+      routineIds.add(routine.id);
+      routines.push(routine);
+      report.added.routines++;
+    }
+  }
+
+  return { merged: { ...cur, weights, foods, daily, workouts, routines }, report };
 }

@@ -1,4 +1,4 @@
-import type { ChecklistKey, DayPlan, MealType, SessionType, UserProfile, WorkoutType } from './types';
+import type { ChecklistKey, DayPlan, MealType, SessionType, UserProfile, WorkoutRoutine, WorkoutType } from './types';
 import { todayISO } from './lib/dates';
 
 export const MEALS: MealType[] = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
@@ -14,36 +14,52 @@ export const CHECKLIST_ITEMS: { key: ChecklistKey; label: string }[] = [
   { key: 'weighIn', label: 'Recorded morning body weight' },
 ];
 
-export const SESSION_LABELS: Record<SessionType, string> = {
-  'upper-a': 'Upper A',
-  'lower-a': 'Lower A',
-  'upper-b': 'Upper B',
-  'lower-b': 'Lower B',
-  recovery: 'Active recovery',
-};
-
-export const PLAN_LABELS: Record<DayPlan, string> = { ...SESSION_LABELS, rest: 'Rest' };
-
-export const WORKOUT_TEMPLATES: Record<WorkoutType, string[]> = {
-  'upper-a': [
+export const DEFAULT_ROUTINES: WorkoutRoutine[] = [
+  {
+    id: 'upper-a',
+    name: 'Upper A',
+    exercises: [
     'Machine Chest Press',
     'Lat Pulldown',
     'Seated Cable Row',
     'Machine Shoulder Press',
     'Dumbbell Bicep Curl',
     'Cable Tricep Pushdown',
-  ],
-  'lower-a': ['Leg Press', 'Seated Leg Curl', 'Leg Extension', 'Glute Bridge', 'Standing Calf Raises', 'Dead Bug'],
-  'upper-b': [
+    ],
+  },
+  {
+    id: 'lower-a',
+    name: 'Lower A',
+    exercises: ['Leg Press', 'Seated Leg Curl', 'Leg Extension', 'Glute Bridge', 'Standing Calf Raises', 'Dead Bug'],
+  },
+  {
+    id: 'upper-b',
+    name: 'Upper B',
+    exercises: [
     'Incline Chest Press',
     'Chest Supported Row',
     'Neutral Grip Lat Pulldown',
     'Lateral Raises',
     'Hammer Curls',
     'Tricep Pushdown',
-  ],
-  'lower-b': ['Leg Press', 'Seated Leg Curl', 'Supported Box Squat', 'Glute Bridge', 'Calf Raises', 'Bird Dog'],
+    ],
+  },
+  {
+    id: 'lower-b',
+    name: 'Lower B',
+    exercises: ['Leg Press', 'Seated Leg Curl', 'Supported Box Squat', 'Glute Bridge', 'Calf Raises', 'Bird Dog'],
+  },
+];
+
+export const SESSION_LABELS: Record<string, string> = {
+  ...Object.fromEntries(DEFAULT_ROUTINES.map(({ id, name }) => [id, name])),
+  recovery: 'Active recovery',
 };
+
+export const PLAN_LABELS: Record<string, string> = { ...SESSION_LABELS, rest: 'Rest' };
+
+export const routineLabel = (id: string, routines: WorkoutRoutine[], fallback?: string) =>
+  routines.find((routine) => routine.id === id)?.name ?? fallback ?? SESSION_LABELS[id] ?? id;
 
 /** Index 0 = Sunday */
 export const DEFAULT_SCHEDULE: DayPlan[] = ['rest', 'upper-a', 'lower-a', 'rest', 'upper-b', 'lower-b', 'recovery'];

@@ -1,12 +1,13 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Beef, CalendarCheck, Droplets, Dumbbell, Flame, Footprints } from 'lucide-react';
+import { Beef, CalendarCheck, ChevronLeft, ChevronRight, Droplets, Dumbbell, Flame, Footprints } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, ProgressBar } from '../components/ui';
 import WeightChart from '../components/WeightChart';
-import { checkedCount, completionPct, dayTotals, latestWeight, progressPct, weeklyOverview } from '../lib/calc';
-import { daysBetween, formatLong, todayISO, weekdayOf } from '../lib/dates';
+import { checkedCount, completionPct, dayTotals, latestWeight, periodOverview, progressPct } from '../lib/calc';
+import { addDays, addMonths, daysBetween, endOfMonth, formatLong, formatShort, parseISO, startOfMonth, startOfWeek, todayISO, weekdayOf } from '../lib/dates';
 import { fmt, fmtKg, fmtSigned } from '../lib/format';
-import { CHECKLIST_ITEMS, PLAN_LABELS, SESSION_LABELS } from '../constants';
+import { CHECKLIST_ITEMS, PLAN_LABELS, routineLabel } from '../constants';
 
 function Journey({ start, target, current }: { start: number; target: number; current: number | null }) {
   const span = start - target;
@@ -83,6 +84,8 @@ function Meter({
 
 export default function Dashboard() {
   const { data, addWater } = useStore();
+  const [trendPeriod, setTrendPeriod] = useState<'week' | 'month'>('week');
+  const [trendDate, setTrendDate] = useState(todayISO());
   const { profile } = data;
   const today = todayISO();
   const latest = latestWeight(data.weights);
@@ -98,16 +101,28 @@ export default function Dashboard() {
   const plan = profile.schedule[weekdayOf(today)];
   const gymStatus = workout
     ? workout.status === 'completed'
-      ? `${SESSION_LABELS[workout.workoutType]} completed`
+      ? `${routineLabel(workout.workoutType, data.routines, workout.routineName)} completed`
       : workout.status === 'skipped'
-        ? `${SESSION_LABELS[workout.workoutType]} skipped`
+        ? `${routineLabel(workout.workoutType, data.routines, workout.routineName)} skipped`
         : workout.status === 'rescheduled'
-          ? `${SESSION_LABELS[workout.workoutType]} moved`
-          : `${SESSION_LABELS[workout.workoutType]} planned`
+          ? `${routineLabel(workout.workoutType, data.routines, workout.routineName)} moved`
+          : `${routineLabel(workout.workoutType, data.routines, workout.routineName)} planned`
     : plan === 'rest'
       ? 'Rest day'
-      : `${PLAN_LABELS[plan]} not started`;
-  const week = weeklyOverview(data, today);
+      : `${PLAN_LABELS[plan] ?? routineLabel(plan, data.routines)} not started`;
+  const periodStart = trendPeriod === 'week' ? startOfWeek(trendDate) : startOfMonth(trendDate);
+  const periodEnd = trendPeriod === 'week' ? addDays(periodStart, 6) : endOfMonth(trendDate);
+  const previousStart = trendPeriod === 'week' ? addDays(periodStart, -7) : addMonths(periodStart, -1);
+  const previousEnd = addDays(periodStart, -1);
+  const trends = periodOverview(data, periodStart, periodEnd, previousStart, previousEnd);
+  const currentPeriodStart = trendPeriod === 'week' ? startOfWeek(today) : startOfMonth(today);
+  const periodStartYear = parseISO(periodStart).getFullYear();
+  const periodEndYear = parseISO(periodEnd).getFullYear();
+  const periodTitle = trendPeriod === 'week'
+    ? `${formatShort(periodStart)} – ${formatShort(periodEnd)}, ${
+        periodStartYear === periodEndYear ? periodEndYear : `${periodStartYear}–${periodEndYear}`
+      }`
+    : parseISO(periodStart).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const kcalLeft = profile.calorieTarget - totals.calories;
 
   return (
@@ -200,19 +215,61 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardTitle>This week</CardTitle>
+          <CardTitle right={
+            <div className="flex rounded-xl bg-bg p-1" role="group" aria-label="Habit trend period">
+              <Button
+                variant={trendPeriod === 'week' ? 'primary' : 'ghost'}
+                className="!min-h-9 !px-3"
+                aria-pressed={trendPeriod === 'week'}
+                onClick={() => setTrendPeriod('week')}
+              >
+                Week
+              </Button>
+              <Button
+                variant={trendPeriod === 'month' ? 'primary' : 'ghost'}
+                className="!min-h-9 !px-3"
+                aria-pressed={trendPeriod === 'month'}
+                onClick={() => setTrendPeriod('month')}
+              >
+                Month
+              </Button>
+            </div>
+          }>
+            Habit trends
+          </CardTitle>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <Button
+              variant="ghost"
+              className="!h-9 !min-h-9 !w-9 !px-0"
+              aria-label={`Previous ${trendPeriod}`}
+              onClick={() => setTrendDate((date) => trendPeriod === 'week' ? addDays(date, -7) : addMonths(date, -1))}
+            >
+              <ChevronLeft size={18} />
+            </Button>
+            <p className="text-sm font-medium">{periodTitle}</p>
+            <Button
+              variant="ghost"
+              className="!h-9 !min-h-9 !w-9 !px-0"
+              aria-label={`Next ${trendPeriod}`}
+              disabled={periodStart >= currentPeriodStart}
+              onClick={() => setTrendDate((date) => trendPeriod === 'week' ? addDays(date, 7) : addMonths(date, 1))}
+            >
+              <ChevronRight size={18} />
+            </Button>
+          </div>
           <dl className="divide-y divide-line text-sm">
             {[
-              ['Average calories', week.calories == null ? '–' : `${fmt(week.calories)} kcal`, `${week.foodDays} days logged`],
-              ['Average protein', week.protein == null ? '–' : `${fmt(week.protein)} g`, `${week.foodDays} days logged`],
-              ['Average steps', fmt(week.steps), week.steps == null ? 'no steps logged' : ''],
-              ['Gym sessions', `${week.gym} completed`, ''],
+              ['Average calories', trends.calories == null ? '–' : `${fmt(trends.calories)} kcal`, `${trends.foodDays} days logged`],
+              ['Average protein', trends.protein == null ? '–' : `${fmt(trends.protein)} g`, `${trends.foodDays} days logged`],
+              ['Average steps', fmt(trends.steps), trends.steps == null ? 'no steps logged' : `${trends.stepDays} days logged`],
+              ['Average water', trends.water == null ? '–' : `${fmt(trends.water, 2)} L`, `${trends.waterDays} days logged`],
+              ['Gym sessions', `${trends.gym} completed`, ''],
               [
                 'Weight change',
-                week.weightChange == null ? '–' : `${fmtSigned(week.weightChange)} kg`,
-                week.weightChange == null ? 'needs entries in this and last week' : 'vs last week’s average',
+                trends.weightChange == null ? '–' : `${fmtSigned(trends.weightChange)} kg`,
+                trends.weightChange == null ? 'needs weigh-ins in both periods' : `vs previous ${trendPeriod} average`,
               ],
-              ['Checklist completion', week.checklist == null ? '–' : `${fmt(week.checklist)}%`, `${week.checkDays} days tracked`],
+              ['Checklist completion', trends.checklist == null ? '–' : `${fmt(trends.checklist)}%`, `${trends.checkDays} days tracked`],
             ].map(([k, v, note]) => (
               <div key={k} className="flex items-baseline justify-between gap-3 py-2.5">
                 <dt className="text-muted">{k}</dt>

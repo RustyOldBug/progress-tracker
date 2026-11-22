@@ -26,7 +26,7 @@ export default function Nutrition() {
   const protLeft = profile.proteinTarget - totals.protein;
 
   // Most recently used distinct foods, for one-tap re-entry.
-  const recents = useMemo(() => {
+  const savedFoods = useMemo(() => {
     const seen = new Set<string>();
     const out: typeof data.foods = [];
     for (const f of [...data.foods].reverse().sort((a, b) => b.date.localeCompare(a.date))) {
@@ -34,10 +34,10 @@ export default function Nutrition() {
       if (!k || seen.has(k)) continue;
       seen.add(k);
       out.push(f);
-      if (out.length >= 12) break;
     }
     return out;
   }, [data.foods]);
+  const recents = savedFoods.slice(0, 12);
 
   const reset = () => {
     setName('');
@@ -133,7 +133,31 @@ export default function Nutrition() {
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Field label="Food name">
-              <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Paneer bhurji with 2 rotis" />
+              <Input
+                ref={nameRef}
+                list="saved-foods"
+                value={name}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setName(value);
+                  const match = savedFoods.find((food) => food.foodName.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase());
+                  if (match) {
+                    setMeal(match.meal);
+                    setKcal(String(match.calories));
+                    setProtein(String(match.protein));
+                  }
+                }}
+                placeholder="e.g. Paneer bhurji with 2 rotis"
+              />
+              <datalist id="saved-foods">
+                {savedFoods.map((food) => (
+                  <option
+                    key={food.id}
+                    value={food.foodName}
+                    label={`${food.meal} · ${fmt(food.calories)} kcal · ${fmt(food.protein)} g protein`}
+                  />
+                ))}
+              </datalist>
             </Field>
           </div>
           <Field label="Meal">
