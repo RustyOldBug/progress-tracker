@@ -146,7 +146,7 @@ export default function Nutrition() {
               <Input type="number" inputMode="numeric" min={0} value={kcal} onChange={(e) => setKcal(e.target.value)} />
             </Field>
             <Field label="Protein (g)">
-              <Input type="number" inputMode="decimal" min={0} value={protein} onChange={(e) => setProtein(e.target.value)} />
+              <Input type="number" inputMode="decimal" step="any" min={0} value={protein} onChange={(e) => setProtein(e.target.value)} />
             </Field>
           </div>
           <div className="space-y-2 sm:col-span-2">

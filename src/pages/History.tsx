@@ -16,7 +16,13 @@ export default function HistoryPage() {
     data.weights.forEach((w) => s.add(w.date));
     data.foods.forEach((f) => s.add(f.date));
     data.workouts.forEach((w) => s.add(w.date));
-    Object.keys(data.daily).forEach((d) => s.add(d));
+    Object.entries(data.daily).forEach(([d, record]) => {
+      const hasChecklist = Object.values(record.checklist).some(Boolean);
+      const hasSteps = record.steps != null && record.steps > 0;
+      const hasWater = record.water > 0;
+      const hasNotes = record.notes.trim().length > 0;
+      if (hasChecklist || hasSteps || hasWater || hasNotes) s.add(d);
+    });
     return [...s].filter(Boolean).sort().reverse();
   }, [data]);
 

@@ -35,7 +35,9 @@ function Routes({ route }: { route: string }) {
 
 export default function App() {
   const route = useRoute();
-  useEffect(() => window.scrollTo(0, 0), [route]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [route]);
   return (
     <StoreProvider>
       <ConfirmProvider>

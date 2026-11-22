@@ -11,7 +11,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays, todayISO } from '../lib/dates';
 import { clamp } from '../lib/format';
 
@@ -119,7 +119,16 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   return <input ref={ref} {...p} className={cx(inputCls, className)} />;
 });
 export function Select({ className, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...p} className={cx(inputCls, className)} />;
+  return (
+    <span className="relative block">
+      <select {...p} className={cx(inputCls, 'cursor-pointer appearance-none pr-10', className)} />
+      <ChevronDown
+        aria-hidden="true"
+        size={16}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+      />
+    </span>
+  );
 }
 export function Textarea({ className, ...p }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...p} className={cx(inputCls, 'py-2', className)} />;
