@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Check, Plus, Trash2, Undo2 } from 'lucide-react';
+import { Check, ChevronDown, Plus, Trash2, Undo2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, DateNav, EmptyState, Field, IconButton, Input, Message, Select, Textarea, cx, useConfirm } from '../components/ui';
-import { lastPerformance, weekDates } from '../lib/calc';
+import { lastExerciseSets, lastPerformance, weekDates } from '../lib/calc';
 import { addDays, formatLong, formatMedium, weekdayOf } from '../lib/dates';
-import { newExercises, uid } from '../lib/schema';
+import { uid } from '../lib/schema';
 import { PLAN_LABELS, routineLabel } from '../constants';
 import WorkoutProgressChart from '../components/WorkoutProgressChart';
 import type { ExerciseLog, SessionType, WorkoutRecord, WorkoutStatus } from '../types';
@@ -27,6 +27,7 @@ export default function Gym() {
   const confirm = useConfirm();
   const { profile } = data;
   const [newType, setNewType] = useState<SessionType | ''>('');
+  const [customSessionName, setCustomSessionName] = useState('');
   const [moveTo, setMoveTo] = useState('');
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,16 +40,36 @@ export default function Gym() {
   const weekDone = data.workouts.filter((w) => weekSet.has(w.date) && w.status === 'completed').length;
   const weekPlanned = profile.schedule.filter((p) => p !== 'rest' && p !== 'recovery').length;
   const history = [...data.workouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
+  const pastExercises = [...new Set(data.workouts
+    .filter((workout) => workout.status === 'completed' && workout.date < date)
+    .flatMap((workout) => workout.exercises
+      .filter((exercise) => exercise.sets.some((set) => (set.weight ?? 0) > 0 || (set.reps ?? 0) > 0))
+      .map((exercise) => exercise.name.trim()))
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
   const create = () => {
     if (!selectedType) return;
     const type: SessionType = selectedType;
+    if (type === 'custom' && !customSessionName.trim()) {
+      setError('Enter a name for this custom session.');
+      return;
+    }
+    setError(null);
+    const exerciseNames = selectedRoutine?.exercises ?? [];
     saveWorkout({
       id: uid(),
       date,
       workoutType: type,
-      routineName: routineLabel(type, data.routines),
-      exercises: newExercises(selectedRoutine?.exercises ?? []),
+      routineName: type === 'custom' ? customSessionName.trim() : routineLabel(type, data.routines),
+      exercises: exerciseNames.map((name) => ({
+        id: uid(),
+        name,
+        sets: lastExerciseSets(data.workouts, name, date) ?? [
+          { reps: null, weight: null },
+          { reps: null, weight: null },
+          { reps: null, weight: null },
+        ],
+      })),
       duration: null,
       status: 'planned',
       notes: '',
@@ -102,11 +123,20 @@ export default function Gym() {
                 <Select value={selectedType} onChange={(e) => setNewType(e.target.value as SessionType)}>
                   <option value="recovery">Active recovery</option>
                   {data.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
+                  <option value="custom">Custom session</option>
                 </Select>
               </Field>
             </div>
+            {selectedType === 'custom' && (
+              <div className="w-full sm:w-56">
+                <Field label="Session name">
+                  <Input value={customSessionName} onChange={(event) => setCustomSessionName(event.target.value)} placeholder="e.g. Full body" />
+                </Field>
+              </div>
+            )}
             <Button variant="primary" onClick={create} disabled={!selectedType}><Plus size={18} /> {plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
           </div>
+          {error && <div className="mt-3"><Message tone="error">{error}</Message></div>}
         </Card>
       ) : (
         <>
@@ -153,10 +183,38 @@ export default function Gym() {
                 const last = lastPerformance(data.workouts, ex.name, date);
                 return (
                   <div key={ex.id} className="rounded-xl border border-line p-3">
-                    <div className="flex items-center gap-2">
-                      <Input value={ex.name} onChange={(e) => patchExercise(ex.id, (x) => ({ ...x, name: e.target.value }))} aria-label="Exercise name" className="font-medium" />
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Select
+                        aria-label={`Past exercises for ${ex.name || 'new exercise'}`}
+                        value={pastExercises.some((name) => name.toLocaleLowerCase() === ex.name.trim().toLocaleLowerCase()) ? ex.name : '__custom__'}
+                        onChange={(event) => {
+                          const selected = event.target.value;
+                          if (selected === '__custom__') {
+                            patchExercise(ex.id, (item) => ({ ...item, name: '' }));
+                            return;
+                          }
+                          const sets = lastExerciseSets(data.workouts, selected, date);
+                          patchExercise(ex.id, (item) => ({
+                            ...item,
+                            name: selected,
+                            sets: sets ?? item.sets,
+                          }));
+                        }}
+                      >
+                        <option value="__custom__">Custom exercise…</option>
+                        {pastExercises.map((name) => <option key={name} value={name}>{name}</option>)}
+                      </Select>
                       <IconButton label={`Remove ${ex.name}`} onClick={() => patch((workout) => ({ exercises: workout.exercises.filter((e) => e.id !== ex.id) }))}><Trash2 size={18} /></IconButton>
                     </div>
+                    {(!pastExercises.some((name) => name.toLocaleLowerCase() === ex.name.trim().toLocaleLowerCase())) && (
+                      <Input
+                        value={ex.name}
+                        onChange={(event) => patchExercise(ex.id, (item) => ({ ...item, name: event.target.value }))}
+                        aria-label="Exercise name"
+                        className="mt-2 font-medium"
+                        placeholder="Enter exercise name"
+                      />
+                    )}
                     {last && <p className="mt-1 text-xs text-muted">Last time: {last}</p>}
                     <div className="mt-2 space-y-2">
                       {ex.sets.map((s, i) => (
@@ -193,29 +251,36 @@ export default function Gym() {
       )}
 
       <Card>
-        <CardTitle>Workout history</CardTitle>
-        {history.length === 0 ? (
-          <EmptyState title="No sessions yet" hint="Sessions you start, complete, skip or move will be listed here." />
-        ) : (
-          <ul className="divide-y divide-line">
-            {history.map((w) => (
-              <li key={w.id}>
-                <button type="button" onClick={() => setSelectedDate(w.date)} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
-                  <span>
-                    <span className="block font-medium">{routineLabel(w.workoutType, data.routines, w.routineName)}</span>
-                    <span className="block text-sm text-muted">{formatMedium(w.date)}{w.duration ? ` · ${w.duration} min` : ''}</span>
-                  </span>
-                  <span className={cx('rounded-full px-3 py-1 text-xs font-medium', STATUS_STYLE[w.status])}>{w.status}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <CardTitle>Exercise progress</CardTitle>
+        <WorkoutProgressChart workouts={data.workouts} />
       </Card>
 
       <Card>
-        <CardTitle>Exercise progress</CardTitle>
-        <WorkoutProgressChart workouts={data.workouts} />
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between font-display text-lg font-semibold marker:hidden">
+            <span>Workout history <span className="ml-1 text-sm font-normal text-muted">({history.length})</span></span>
+            <ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-3">
+            {history.length === 0 ? (
+              <EmptyState title="No sessions yet" hint="Sessions you start, complete, skip or move will be listed here." />
+            ) : (
+              <ul className="divide-y divide-line">
+                {history.map((w) => (
+                  <li key={w.id}>
+                    <button type="button" onClick={() => setSelectedDate(w.date)} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
+                      <span>
+                        <span className="block font-medium">{routineLabel(w.workoutType, data.routines, w.routineName)}</span>
+                        <span className="block text-sm text-muted">{formatMedium(w.date)}{w.duration ? ` · ${w.duration} min` : ''}</span>
+                      </span>
+                      <span className={cx('rounded-full px-3 py-1 text-xs font-medium', STATUS_STYLE[w.status])}>{w.status}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
       </Card>
     </div>
   );

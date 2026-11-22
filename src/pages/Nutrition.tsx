@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Pencil, Trash2, X } from 'lucide-react';
 import { useStore } from '../store';
-import { Button, Card, CardTitle, DateNav, EmptyState, Field, IconButton, Input, Message, ProgressBar, Select, useConfirm } from '../components/ui';
+import { Button, Card, CardTitle, cx, DateNav, EmptyState, Field, IconButton, Input, Message, ProgressBar, Select, useConfirm } from '../components/ui';
 import { dayTotals, sum } from '../lib/calc';
 import { formatLong } from '../lib/dates';
 import { fmt } from '../lib/format';
@@ -19,6 +19,8 @@ export default function Nutrition() {
   const [protein, setProtein] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const totals = dayTotals(data.foods, date);
@@ -39,6 +41,45 @@ export default function Nutrition() {
     return out;
   }, [data.foods]);
   const recents = savedFoods.slice(0, 12);
+  const suggestions = useMemo(() => {
+    const query = name.trim().toLocaleLowerCase();
+    if (!query) return [];
+    return savedFoods
+      .filter((food) => food.foodName.toLocaleLowerCase().includes(query))
+      .slice(0, 8);
+  }, [name, savedFoods]);
+
+  const selectSavedFood = (food: (typeof savedFoods)[number]) => {
+    setName(food.foodName);
+    setMeal(food.meal);
+    setKcal(String(food.calories));
+    setProtein(String(food.protein));
+    setError(null);
+    setSuggestionsOpen(false);
+  };
+
+  const handleFoodKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!suggestionsOpen || suggestions.length === 0) {
+      if (event.key === 'ArrowDown' && suggestions.length > 0) {
+        event.preventDefault();
+        setActiveSuggestion(0);
+        setSuggestionsOpen(true);
+      }
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveSuggestion((index) => (index + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveSuggestion((index) => (index - 1 + suggestions.length) % suggestions.length);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      selectSavedFood(suggestions[activeSuggestion]);
+    } else if (event.key === 'Escape') {
+      setSuggestionsOpen(false);
+    }
+  };
 
   const reset = () => {
     setName('');
@@ -131,7 +172,7 @@ export default function Nutrition() {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={() => { setName(f.foodName); setMeal(f.meal); setKcal(String(f.calories)); setProtein(String(f.protein)); setError(null); }}
+                  onClick={() => selectSavedFood(f)}
                   className="min-h-9 rounded-full border border-line px-3 text-sm hover:bg-bg"
                 >
                   {f.foodName}
@@ -143,31 +184,57 @@ export default function Nutrition() {
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Field label="Food name">
-              <Input
-                ref={nameRef}
-                list="saved-foods"
-                value={name}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setName(value);
-                  const match = savedFoods.find((food) => food.foodName.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase());
-                  if (match) {
-                    setMeal(match.meal);
-                    setKcal(String(match.calories));
-                    setProtein(String(match.protein));
-                  }
-                }}
-                placeholder="e.g. Paneer bhurji with 2 rotis"
-              />
-              <datalist id="saved-foods">
-                {savedFoods.map((food) => (
-                  <option
-                    key={food.id}
-                    value={food.foodName}
-                    label={`${food.meal} · ${fmt(food.calories)} kcal · ${fmt(food.protein)} g protein`}
-                  />
-                ))}
-              </datalist>
+              <div className="relative">
+                <Input
+                  ref={nameRef}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={suggestionsOpen && suggestions.length > 0}
+                  aria-controls="saved-food-suggestions"
+                  aria-activedescendant={suggestionsOpen ? `saved-food-option-${activeSuggestion}` : undefined}
+                  autoComplete="off"
+                  value={name}
+                  onFocus={() => { if (name.trim()) setSuggestionsOpen(true); }}
+                  onBlur={() => setSuggestionsOpen(false)}
+                  onKeyDown={handleFoodKeyDown}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setName(value);
+                    setActiveSuggestion(0);
+                    setSuggestionsOpen(true);
+                    const match = savedFoods.find((food) => food.foodName.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase());
+                    if (match) selectSavedFood(match);
+                  }}
+                  placeholder="e.g. Paneer bhurji with 2 rotis"
+                />
+                {suggestionsOpen && suggestions.length > 0 && (
+                  <ul
+                    id="saved-food-suggestions"
+                    role="listbox"
+                    className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-lg"
+                  >
+                    {suggestions.map((food, index) => (
+                      <li
+                        key={food.id}
+                        id={`saved-food-option-${index}`}
+                        role="option"
+                        aria-selected={index === activeSuggestion}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectSavedFood(food)}
+                        className={cx(
+                          'cursor-pointer rounded-lg px-3 py-2 text-sm',
+                          index === activeSuggestion ? 'bg-bg text-ink' : 'text-ink hover:bg-bg'
+                        )}
+                      >
+                        <span className="block truncate font-medium">{food.foodName}</span>
+                        <span className="block text-xs text-muted">
+                          {food.meal} · {fmt(food.calories)} kcal · {fmt(food.protein)} g protein
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </Field>
           </div>
           <Field label="Meal">

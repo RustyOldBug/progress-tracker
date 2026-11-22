@@ -159,7 +159,7 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 export function DateNav({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   const today = todayISO();
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       <IconButton label="Previous day" onClick={() => onChange(addDays(date, -1))}>
         <ChevronLeft size={20} />
       </IconButton>
@@ -168,7 +168,7 @@ export function DateNav({ date, onChange }: { date: string; onChange: (d: string
         value={date}
         onChange={(e) => e.target.value && onChange(e.target.value)}
         aria-label="Selected date"
-        className={cx(inputCls, 'w-auto')}
+        className={cx(inputCls, '!w-auto min-w-0 max-w-full')}
       />
       <IconButton label="Next day" onClick={() => onChange(addDays(date, 1))}>
         <ChevronRight size={20} />

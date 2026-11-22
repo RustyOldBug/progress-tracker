@@ -30,6 +30,55 @@
   --danger: 244 108 108;
 }
 
+:root[data-palette='ocean'] {
+  --bg: 240 247 252;
+  --surface: 255 255 255;
+  --ink: 19 31 46;
+  --muted: 87 108 130;
+  --line: 212 225 238;
+  --accent: 30 115 205;
+  --accent-soft: 222 237 253;
+  --on-accent: 255 255 255;
+}
+
+:root.dark[data-palette='ocean'] {
+  --bg: 13 20 30;
+  --surface: 21 32 46;
+  --ink: 231 239 248;
+  --muted: 143 163 186;
+  --line: 39 55 74;
+  --accent: 99 174 255;
+  --accent-soft: 29 54 81;
+  --on-accent: 10 24 40;
+}
+
+:root[data-palette='berry'] {
+  --bg: 248 244 250;
+  --surface: 255 255 255;
+  --ink: 40 27 47;
+  --muted: 112 96 121;
+  --line: 229 217 235;
+  --accent: 145 70 180;
+  --accent-soft: 243 228 250;
+  --on-accent: 255 255 255;
+}
+
+:root.dark[data-palette='berry'] {
+  --bg: 24 17 29;
+  --surface: 35 26 42;
+  --ink: 244 235 249;
+  --muted: 178 157 188;
+  --line: 57 43 67;
+  --accent: 200 137 232;
+  --accent-soft: 61 39 73;
+  --on-accent: 31 16 39;
+}
+
+select.theme-select-options option {
+  color: rgb(var(--ink));
+  background-color: rgb(var(--surface));
+}
+
 html {
   color-scheme: light;
 }

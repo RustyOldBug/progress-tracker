@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemePalette = 'forest' | 'ocean' | 'berry';
 const KEY = 'wlt:theme';
+const PALETTE_KEY = 'wlt:palette';
 const listeners = new Set<() => void>();
 
 export function getMode(): ThemeMode {
@@ -14,11 +16,23 @@ export function getMode(): ThemeMode {
   return 'system';
 }
 
+export function getPalette(): ThemePalette {
+  try {
+    const palette = localStorage.getItem(PALETTE_KEY);
+    if (palette === 'forest' || palette === 'ocean' || palette === 'berry') return palette;
+  } catch {
+    /* ignore */
+  }
+  return 'forest';
+}
+
 export function applyTheme() {
   const m = getMode();
   const dark = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.classList.toggle('dark', dark);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0e1613' : '#f3f5f1');
+  document.documentElement.dataset.palette = getPalette();
+  const background = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim().replace(/ /g, ', ');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', `rgb(${background})`);
 }
 
 export function setMode(m: ThemeMode) {
@@ -31,6 +45,16 @@ export function setMode(m: ThemeMode) {
   listeners.forEach((l) => l());
 }
 
+export function setPalette(palette: ThemePalette) {
+  try {
+    localStorage.setItem(PALETTE_KEY, palette);
+  } catch {
+    /* ignore */
+  }
+  applyTheme();
+  listeners.forEach((listener) => listener());
+}
+
 export function useThemeMode(): ThemeMode {
   return useSyncExternalStore(
     (cb) => {
@@ -38,5 +62,15 @@ export function useThemeMode(): ThemeMode {
       return () => listeners.delete(cb);
     },
     getMode
+  );
+}
+
+export function useThemePalette(): ThemePalette {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    getPalette
   );
 }

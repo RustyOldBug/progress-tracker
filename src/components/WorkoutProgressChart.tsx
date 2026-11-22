@@ -22,13 +22,27 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
       if (workout.status !== 'completed') continue;
       for (const item of workout.exercises) {
         const key = item.name.trim().toLocaleLowerCase();
-        if (key && !names.has(key)) names.set(key, item.name.trim());
+        const performed = item.sets.some((set) => (set.weight ?? 0) > 0 || (set.reps ?? 0) > 0);
+        if (key && performed && !names.has(key)) names.set(key, item.name.trim());
       }
     }
     return [...names.entries()].map(([key, name]) => ({ key, name }));
   }, [workouts]);
 
   const selectedExercise = exercises.find((item) => item.key === exercise)?.key ?? exercises[0]?.key ?? '';
+  const availableMetrics = useMemo(() => METRICS.filter((item) => {
+    const sets = workouts
+      .filter((workout) => workout.status === 'completed')
+      .flatMap((workout) => workout.exercises
+        .filter((entry) => entry.name.trim().toLocaleLowerCase() === selectedExercise)
+        .flatMap((entry) => entry.sets));
+    if (item.id === 'weight') return sets.some((set) => (set.weight ?? 0) > 0);
+    if (item.id === 'reps') return sets.some((set) => (set.reps ?? 0) > 0);
+    return sets.some((set) => (set.weight ?? 0) > 0 && (set.reps ?? 0) > 0);
+  }), [workouts, selectedExercise]);
+  const selectedMetric = availableMetrics.some((item) => item.id === metric)
+    ? metric
+    : availableMetrics[0]?.id ?? metric;
   const points = useMemo(() => {
     if (!selectedExercise) return [];
     return workouts
@@ -40,20 +54,20 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
         if (!sets.length) return [];
 
         const values = sets.flatMap((set) => {
-          if (metric === 'weight') return set.weight == null ? [] : [set.weight];
-          if (metric === 'reps') return set.reps == null ? [] : [set.reps];
-          return set.weight == null || set.reps == null ? [] : [set.weight * set.reps];
+          if (selectedMetric === 'weight') return set.weight == null || set.weight <= 0 ? [] : [set.weight];
+          if (selectedMetric === 'reps') return set.reps == null || set.reps <= 0 ? [] : [set.reps];
+          return set.weight == null || set.weight <= 0 || set.reps == null ? [] : [set.weight * set.reps];
         });
         if (!values.length) return [];
-        const value = metric === 'weight'
+        const value = selectedMetric === 'weight'
           ? values.reduce((best, current) => Math.max(best, current), Number.NEGATIVE_INFINITY)
           : values.reduce((total, current) => total + current, 0);
         return [{ date: workout.date, label: formatShort(workout.date), value }];
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [workouts, selectedExercise, metric]);
+  }, [workouts, selectedExercise, selectedMetric]);
 
-  const metricInfo = METRICS.find((item) => item.id === metric)!;
+  const metricInfo = METRICS.find((item) => item.id === selectedMetric)!;
 
   return (
     <div>
@@ -64,6 +78,7 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
             value={selectedExercise}
             onChange={(event) => setExercise(event.target.value)}
             disabled={exercises.length === 0}
+            className="theme-select-options"
           >
             {exercises.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
           </Select>
@@ -71,10 +86,11 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
         <Field label="Metric">
           <Select
             aria-label="Progress metric"
-            value={metric}
+            value={selectedMetric}
             onChange={(event) => setMetric(event.target.value as Metric)}
+            className="theme-select-options"
           >
-            {METRICS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            {availableMetrics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </Select>
         </Field>
       </div>

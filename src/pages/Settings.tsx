@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, Field, Input, Message, PageHeader, Select, useConfirm } from '../components/ui';
 import { isValidISO, WEEKDAY_NAMES } from '../lib/dates';
-import { setMode, useThemeMode, type ThemeMode } from '../lib/theme';
+import { setMode, setPalette, useThemeMode, useThemePalette, type ThemeMode, type ThemePalette } from '../lib/theme';
 import { DEFAULT_ROUTINES, defaultProfile } from '../constants';
 import { uid } from '../lib/schema';
 import type { DayPlan, UserProfile, WorkoutRoutine } from '../types';
@@ -50,6 +50,7 @@ export default function SettingsPage() {
   const { data, setProfile, setRoutines, resetProfile } = useStore();
   const confirm = useConfirm();
   const theme = useThemeMode();
+  const palette = useThemePalette();
   const [draft, setDraft] = useState<Draft>(() => toDraft(data.profile, data.routines));
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
@@ -287,6 +288,13 @@ export default function SettingsPage() {
             <option value="system">Match my device</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
+          </Select>
+        </Field>
+        <Field label="Color palette" hint="Choose an accent color set. It works with light, dark, and device themes.">
+          <Select value={palette} onChange={(e) => setPalette(e.target.value as ThemePalette)}>
+            <option value="forest">Forest green</option>
+            <option value="ocean">Bright ocean blue</option>
+            <option value="berry">Berry violet</option>
           </Select>
         </Field>
       </Card>

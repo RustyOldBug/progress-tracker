@@ -25,8 +25,14 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
   }, [weights, range]);
 
   const { start: startW, target: targetW } = { start: profile.startingWeight, target: profile.targetWeight };
-  const lo = Math.floor(Math.min(targetW, ...points.map((p) => p.weight)) - 1);
-  const hi = Math.ceil(Math.max(startW, ...points.map((p) => p.weight)) + 1);
+  const weightsInRange = points.flatMap((point) => [point.weight, point.trend]);
+  const minWeight = weightsInRange.length ? Math.min(...weightsInRange) : targetW;
+  const maxWeight = weightsInRange.length ? Math.max(...weightsInRange) : startW;
+  const yPadding = Math.max(0.5, (maxWeight - minWeight) * 0.05);
+  const yStep = maxWeight - minWeight <= 6 ? 1 : maxWeight - minWeight <= 14 ? 2 : maxWeight - minWeight <= 40 ? 5 : 10;
+  const lo = Math.floor((minWeight - yPadding) / yStep) * yStep;
+  const hi = Math.ceil((maxWeight + yPadding) / yStep) * yStep;
+  const yTicks = Array.from({ length: Math.round((hi - lo) / yStep) + 1 }, (_, index) => lo + index * yStep);
   const tMin = points.length ? points[0].t : 0;
   const tMax = points.length ? points[points.length - 1].t : 1;
   const pad = tMin === tMax ? 3 : 0;
@@ -70,6 +76,7 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
               />
               <YAxis
                 domain={[lo, hi]}
+                ticks={yTicks}
                 tick={{ fontSize: 12, fill: 'rgb(var(--muted))' }}
                 stroke="rgb(var(--line))"
                 unit=" kg"
@@ -85,18 +92,22 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
                   color: 'rgb(var(--ink))',
                 }}
               />
-              <ReferenceLine
-                y={startW}
-                stroke="rgb(var(--muted))"
-                strokeDasharray="4 4"
-                label={{ value: 'Start', position: 'insideTopRight', fontSize: 11, fill: 'rgb(var(--muted))' }}
-              />
-              <ReferenceLine
-                y={targetW}
-                stroke="rgb(var(--accent))"
-                strokeDasharray="4 4"
-                label={{ value: 'Target', position: 'insideBottomRight', fontSize: 11, fill: 'rgb(var(--accent))' }}
-              />
+              {startW >= lo && startW <= hi && (
+                <ReferenceLine
+                  y={startW}
+                  stroke="rgb(var(--muted))"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Start', position: 'insideTopRight', fontSize: 11, fill: 'rgb(var(--muted))' }}
+                />
+              )}
+              {targetW >= lo && targetW <= hi && (
+                <ReferenceLine
+                  y={targetW}
+                  stroke="rgb(var(--accent))"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Target', position: 'insideBottomRight', fontSize: 11, fill: 'rgb(var(--accent))' }}
+                />
+              )}
               <Line
                 type="monotone"
                 dataKey="weight"

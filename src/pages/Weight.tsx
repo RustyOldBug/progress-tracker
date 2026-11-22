@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, EmptyState, Field, IconButton, Input, Message, PageHeader, Textarea, useConfirm } from '../components/ui';
 import WeightChart from '../components/WeightChart';
@@ -11,10 +11,11 @@ export default function Weight() {
   const { data, saveWeight, deleteWeight } = useStore();
   const confirm = useConfirm();
   const { profile } = data;
-  const [date, setDate] = useState(todayISO());
-  const [weight, setWeight] = useState('');
-  const [waist, setWaist] = useState('');
-  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(todayISO);
+  const initialEntry = data.weights.find((entry) => entry.date === date);
+  const [weight, setWeight] = useState(() => initialEntry ? String(initialEntry.weight) : '');
+  const [waist, setWaist] = useState(() => initialEntry?.waist != null ? String(initialEntry.waist) : '');
+  const [notes, setNotes] = useState(() => initialEntry?.notes ?? '');
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   const existing = data.weights.find((w) => w.date === date);
@@ -103,54 +104,63 @@ export default function Weight() {
       </Card>
 
       <Card>
-        <CardTitle>History</CardTitle>
-        {rows.length === 0 ? (
-          <EmptyState title="No weigh-ins yet" hint="Your entries will be listed here, newest first." />
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                <th className="py-2 font-medium">Date</th>
-                <th className="py-2 font-medium">Weight</th>
-                <th className="py-2 font-medium">Change</th>
-                <th className="py-2 font-medium">Waist</th>
-                <th className="py-2"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map((r, i) => {
-                const prev = rows[i + 1];
-                return (
-                  <tr key={r.id}>
-                    <td className="py-2 pr-2">
-                      {formatMedium(r.date)}
-                      {r.notes && <span className="block max-w-[10rem] truncate text-xs text-muted">{r.notes}</span>}
-                    </td>
-                    <td className="py-2 pr-2 font-semibold tabular-nums">{fmt(r.weight, 1)}</td>
-                    <td className="py-2 pr-2 tabular-nums text-muted">{prev ? fmtSigned(r.weight - prev.weight) : '–'}</td>
-                    <td className="py-2 pr-2 tabular-nums text-muted">{r.waist == null ? '–' : fmt(r.waist, 1)}</td>
-                    <td className="py-1 text-right">
-                      <div className="flex justify-end">
-                        <IconButton
-                          label={`Edit entry for ${r.date}`}
-                          onClick={() => {
-                            load(r.date);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                        >
-                          <Pencil size={18} />
-                        </IconButton>
-                        <IconButton label={`Delete entry for ${r.date}`} onClick={() => remove(r.id, r.date)}>
-                          <Trash2 size={18} />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between font-display text-lg font-semibold marker:hidden">
+            <span>History <span className="ml-1 text-sm font-normal text-muted">({rows.length})</span></span>
+            <ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-3">
+            {rows.length === 0 ? (
+              <EmptyState title="No weigh-ins yet" hint="Your entries will be listed here, newest first." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed text-sm">
+                  <thead className="text-left text-muted">
+                    <tr>
+                      <th className="py-2 font-medium">Date</th>
+                      <th className="py-2 font-medium">Weight</th>
+                      <th className="hidden py-2 font-medium sm:table-cell">Change</th>
+                      <th className="hidden py-2 font-medium sm:table-cell">Waist</th>
+                      <th className="py-2"><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {rows.map((r, i) => {
+                      const prev = rows[i + 1];
+                      return (
+                        <tr key={r.id}>
+                          <td className="py-2 pr-2">
+                            {formatMedium(r.date)}
+                            {r.notes && <span className="block max-w-[10rem] truncate text-xs text-muted">{r.notes}</span>}
+                          </td>
+                          <td className="py-2 pr-2 font-semibold tabular-nums">{fmt(r.weight, 1)}</td>
+                          <td className="hidden py-2 pr-2 tabular-nums text-muted sm:table-cell">{prev ? fmtSigned(r.weight - prev.weight) : '–'}</td>
+                          <td className="hidden py-2 pr-2 tabular-nums text-muted sm:table-cell">{r.waist == null ? '–' : fmt(r.waist, 1)}</td>
+                          <td className="py-1 text-right">
+                            <div className="flex justify-end">
+                              <IconButton
+                                label={`Edit entry for ${r.date}`}
+                                onClick={() => {
+                                  load(r.date);
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                              >
+                                <Pencil size={18} />
+                              </IconButton>
+                              <IconButton label={`Delete entry for ${r.date}`} onClick={() => remove(r.id, r.date)}>
+                                <Trash2 size={18} />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </details>
       </Card>
     </div>
   );

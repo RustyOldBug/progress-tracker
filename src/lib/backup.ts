@@ -43,7 +43,7 @@ export function downloadBackup(data: AppData, prefix = 'weight-loss-backup'): st
 }
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const SESSION_TYPES = ['upper-a', 'lower-a', 'upper-b', 'lower-b', 'recovery'];
+const SESSION_TYPES = ['upper-a', 'lower-a', 'upper-b', 'lower-b', 'recovery', 'custom'];
 const STATUSES = ['planned', 'completed', 'skipped', 'rescheduled'];
 
 function validateData(d: Record<string, unknown>): string | null {

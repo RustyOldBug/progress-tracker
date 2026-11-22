@@ -1,4 +1,4 @@
-import type { AppData, DailyRecord, FoodEntry, WeightEntry, WorkoutRecord } from '../types';
+import type { AppData, DailyRecord, FoodEntry, SetLog, WeightEntry, WorkoutRecord } from '../types';
 import { CHECKLIST_ITEMS } from '../constants';
 import { addDays, daysBetween, startOfWeek } from './dates';
 import { clamp } from './format';
@@ -127,6 +127,11 @@ export function periodOverview(data: AppData, start: string, end: string, previo
 }
 
 export function lastPerformance(workouts: WorkoutRecord[], exerciseName: string, beforeDate: string): string | null {
+  const sets = lastExerciseSets(workouts, exerciseName, beforeDate);
+  return sets?.map((set) => `${set.weight ?? '–'} kg × ${set.reps ?? '–'}`).join(', ') ?? null;
+}
+
+export function lastExerciseSets(workouts: WorkoutRecord[], exerciseName: string, beforeDate: string): SetLog[] | null {
   const name = exerciseName.trim().toLowerCase();
   if (!name) return null;
   const prior = workouts
@@ -135,7 +140,7 @@ export function lastPerformance(workouts: WorkoutRecord[], exerciseName: string,
   for (const w of prior) {
     const ex = w.exercises.find((e) => e.name.trim().toLowerCase() === name);
     const sets = ex?.sets.filter((s) => s.weight != null || s.reps != null);
-    if (sets && sets.length) return sets.map((s) => `${s.weight ?? '–'} kg × ${s.reps ?? '–'}`).join(', ');
+    if (sets?.length) return sets.map((set) => ({ ...set }));
   }
   return null;
 }

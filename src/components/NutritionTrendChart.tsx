@@ -150,10 +150,13 @@ export default function NutritionTrendChart({
                 />
                 <Tooltip
                   labelFormatter={(value) => formatLong(addDays(EPOCH, Number(value)))}
-                  formatter={(value, name) => [
-                    name === 'calories' ? `${fmt(Number(value))} kcal` : `${fmt(Number(value))} g`,
-                    name === 'calories' ? 'Calories' : 'Protein',
-                  ]}
+                  formatter={(value, name) => {
+                    const isCalories = name === 'calories' || name === 'Calories';
+                    return [
+                      isCalories ? `${fmt(Number(value))} kcal` : `${fmt(Number(value))} g`,
+                      isCalories ? 'Calories' : 'Protein',
+                    ];
+                  }}
                   contentStyle={{
                     background: 'rgb(var(--surface))',
                     border: '1px solid rgb(var(--line))',
