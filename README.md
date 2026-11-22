@@ -58,6 +58,7 @@ Storage is versioned (`schemaVersion` in `src/lib/schema.ts`). When the data sha
 - Weight chart axes adapt to the selected date range. Weight and workout history sections are collapsed initially.
 - Gym exercise trends use completed workouts and only offer metrics with recorded values; zero-weight bodyweight sets do not count as lifted weight or volume.
 - Gym sessions can be custom named, and exercises can be added from prior workouts with their latest sets prefilled.
+- Gym sessions can be skipped or rescheduled before starting; canceling a started session removes its logged exercises, sets, duration and notes.
 - Appearance settings include light/dark/system modes and Forest, Ocean, and Berry color palettes.
 - Nutrition patterns chart daily calorie and protein totals against their targets; averages include only days with food entries.
 - Averages use only days that have data. A day with no food logged is never counted as 0 kcal.

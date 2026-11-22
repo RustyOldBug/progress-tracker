@@ -47,21 +47,46 @@ export default function Gym() {
       .map((exercise) => exercise.name.trim()))
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
-  const create = () => {
+  const createRecord = (status: WorkoutStatus, started: boolean, includeExercises: boolean) => {
     if (!selectedType) return;
     const type: SessionType = selectedType;
     if (type === 'custom' && !customSessionName.trim()) {
       setError('Enter a name for this custom session.');
-      return;
+      return null;
     }
     setError(null);
     const exerciseNames = selectedRoutine?.exercises ?? [];
-    saveWorkout({
+    const workout: WorkoutRecord = {
       id: uid(),
       date,
       workoutType: type,
       routineName: type === 'custom' ? customSessionName.trim() : routineLabel(type, data.routines),
-      exercises: exerciseNames.map((name) => ({
+      exercises: includeExercises ? exerciseNames.map((name) => ({
+        id: uid(),
+        name,
+        sets: lastExerciseSets(data.workouts, name, date) ?? [
+          { reps: null, weight: null },
+          { reps: null, weight: null },
+          { reps: null, weight: null },
+        ],
+      })) : [],
+      duration: null,
+      status,
+      started,
+      notes: '',
+    };
+    saveWorkout(workout);
+    return workout;
+  };
+  const create = () => { createRecord('planned', true, true); };
+  const startRecord = () => {
+    if (!record) return;
+    const routine = data.routines.find((item) => item.id === record.workoutType);
+    const names = routine?.exercises ?? [];
+    patch({
+      status: 'planned',
+      started: true,
+      exercises: names.map((name) => ({
         id: uid(),
         name,
         sets: lastExerciseSets(data.workouts, name, date) ?? [
@@ -70,10 +95,36 @@ export default function Gym() {
           { reps: null, weight: null },
         ],
       })),
-      duration: null,
-      status: 'planned',
-      notes: '',
     });
+  };
+  const skipBeforeStart = () => {
+    if (record?.status === 'planned' && record.started === false) {
+      patch({ status: 'skipped' });
+      return;
+    }
+    createRecord('skipped', false, false);
+  };
+  const beginReschedule = () => {
+    setMoveTo(addDays(date, 1));
+    setMoving(true);
+    setError(null);
+  };
+  const moveBeforeStart = () => {
+    if (!moveTo || moveTo === date) return;
+    if (data.workouts.some((workout) => workout.date === moveTo)) {
+      setError('There is already a session on that date. Choose another date.');
+      return;
+    }
+    if (record) {
+      rescheduleWorkout(record.id, moveTo);
+    } else {
+      const workout = createRecord('planned', false, false);
+      if (!workout) return;
+      rescheduleWorkout(workout.id, moveTo);
+    }
+    setSelectedDate(moveTo);
+    setMoving(false);
+    setError(null);
   };
 
   const patch = (p: Partial<WorkoutRecord> | ((workout: WorkoutRecord) => Partial<WorkoutRecord>)) =>
@@ -136,6 +187,19 @@ export default function Gym() {
             )}
             <Button variant="primary" onClick={create} disabled={!selectedType}><Plus size={18} /> {plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
           </div>
+          {plan !== 'rest' && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={skipBeforeStart}>Skip session</Button>
+              <Button onClick={beginReschedule}>Reschedule</Button>
+            </div>
+          )}
+          {moving && (
+            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-bg p-3">
+              <Field label="Move to"><Input type="date" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} /></Field>
+              <Button variant="primary" disabled={!moveTo || moveTo === date} onClick={moveBeforeStart}>Move session</Button>
+              <Button onClick={() => setMoving(false)}>Cancel</Button>
+            </div>
+          )}
           {error && <div className="mt-3"><Message tone="error">{error}</Message></div>}
         </Card>
       ) : (
@@ -146,35 +210,54 @@ export default function Gym() {
             >
               {routineLabel(record.workoutType, data.routines, record.routineName)}
             </CardTitle>
-            <div className="flex flex-wrap gap-2">
-              {record.status === 'planned' && (
+            {record.status === 'planned' && record.started === false ? (
+              <>
+                <p className="mb-3 text-sm text-muted">This session is scheduled but has not been started.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary" onClick={startRecord}><Plus size={18} /> Start session</Button>
+                  <Button onClick={skipBeforeStart}>Skip session</Button>
+                  <Button onClick={beginReschedule}>Reschedule</Button>
+                </div>
+                {moving && (
+                  <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-bg p-3">
+                    <Field label="Move to"><Input type="date" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} /></Field>
+                    <Button variant="primary" disabled={!moveTo || moveTo === date} onClick={moveBeforeStart}>Move session</Button>
+                    <Button onClick={() => setMoving(false)}>Cancel</Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {record.status === 'planned' && (
                 <>
                   <Button variant="primary" onClick={complete}><Check size={18} /> Mark completed</Button>
-                  <Button onClick={() => patch({ status: 'skipped' })}>Skip</Button>
-                  <Button onClick={() => { setMoving((m) => !m); setMoveTo(addDays(date, 1)); }}>Reschedule</Button>
                 </>
-              )}
-              {record.status !== 'planned' && (
+                )}
+                {record.status !== 'planned' && (
                 <Button onClick={() => patch({ status: 'planned', rescheduledTo: undefined })}><Undo2 size={18} /> {record.status === 'completed' ? 'Undo completion' : 'Back to planned'}</Button>
-              )}
-              <Button
-                variant="ghost"
-                onClick={async () => {
-                  if (await confirm({ title: 'Delete this session?', message: 'Its exercises, sets and notes will be removed. Use Skip or Reschedule to keep a record instead.', confirmLabel: 'Delete', danger: true })) deleteWorkout(record.id);
-                }}
-              >
-                <Trash2 size={18} /> Delete
-              </Button>
-            </div>
-            {moving && (
-              <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-bg p-3">
-                <Field label="Move to"><Input type="date" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} /></Field>
-                <Button variant="primary" disabled={!moveTo || moveTo === date} onClick={() => { rescheduleWorkout(record.id, moveTo); setMoving(false); }}>Move session</Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={async () => {
+                    const started = record.status === 'planned' && record.started !== false;
+                    if (await confirm({
+                      title: started ? 'Cancel this session?' : 'Delete this session?',
+                      message: started
+                        ? 'This will permanently remove this session and all exercises, sets, duration and notes logged for it.'
+                        : 'Its exercises, sets and notes will be removed.',
+                      confirmLabel: started ? 'Cancel session' : 'Delete',
+                      danger: true,
+                    })) deleteWorkout(record.id);
+                  }}
+                >
+                  <Trash2 size={18} /> {record.status === 'planned' && record.started !== false ? 'Cancel session' : 'Delete'}
+                </Button>
               </div>
             )}
             {error && <div className="mt-3"><Message tone="error">{error}</Message></div>}
           </Card>
 
+          {record.status === 'planned' && record.started !== false && <>
           <Card>
             <CardTitle>Exercises</CardTitle>
             {record.exercises.length === 0 && <EmptyState title="No exercises yet" hint="Add one below, for example a walk or mobility work." />}
@@ -247,6 +330,7 @@ export default function Gym() {
             </div>
             <p className="mt-2 text-xs text-muted">Changes save as you type.</p>
           </Card>
+          </>}
         </>
       )}
 

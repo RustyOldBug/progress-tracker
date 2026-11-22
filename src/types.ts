@@ -84,6 +84,7 @@ export interface WorkoutRecord {
   exercises: ExerciseLog[];
   duration: number | null;
   status: WorkoutStatus;
+  started?: boolean;
   rescheduledTo?: string;
   notes: string;
 }

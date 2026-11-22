@@ -121,7 +121,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 export function Select({ className, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <span className="relative block">
-      <select {...p} className={cx(inputCls, 'cursor-pointer appearance-none pr-10', className)} />
+      <select {...p} className={cx(inputCls, 'cursor-pointer appearance-none pr-10 theme-select-options', className)} />
       <ChevronDown
         aria-hidden="true"
         size={16}

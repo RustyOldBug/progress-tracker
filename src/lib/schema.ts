@@ -151,6 +151,7 @@ export function migrate(raw: unknown): AppData {
       })),
       duration: num(w.duration),
       status: w.status as WorkoutRecord['status'],
+      started: typeof w.started === 'boolean' ? w.started : undefined,
       rescheduledTo: typeof w.rescheduledTo === 'string' ? w.rescheduledTo : undefined,
       notes: str(w.notes),
     };

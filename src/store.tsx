@@ -141,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => {
         const w = d.workouts.find((x) => x.id === id);
         if (!w || w.date === newDate) return d;
-        const moved: WorkoutRecord = { ...w, status: 'rescheduled', rescheduledTo: newDate };
+        const moved: WorkoutRecord = { ...w, status: 'rescheduled', started: false, rescheduledTo: newDate };
         let workouts = d.workouts.map((x) => (x.id === id ? moved : x));
         if (!workouts.some((x) => x.date === newDate)) {
           workouts = [
@@ -158,6 +158,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               })),
               duration: null,
               status: 'planned',
+              started: false,
               notes: '',
             },
           ];

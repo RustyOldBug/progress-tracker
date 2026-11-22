@@ -78,7 +78,6 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
             value={selectedExercise}
             onChange={(event) => setExercise(event.target.value)}
             disabled={exercises.length === 0}
-            className="theme-select-options"
           >
             {exercises.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
           </Select>
@@ -88,7 +87,6 @@ export default function WorkoutProgressChart({ workouts }: { workouts: WorkoutRe
             aria-label="Progress metric"
             value={selectedMetric}
             onChange={(event) => setMetric(event.target.value as Metric)}
-            className="theme-select-options"
           >
             {availableMetrics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </Select>
