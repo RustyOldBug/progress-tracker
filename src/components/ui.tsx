@@ -3,6 +3,7 @@ import {
   forwardRef,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -189,14 +190,28 @@ export const useConfirm = () => useContext(ConfirmCtx);
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOpts | null>(null);
   const resolver = useRef<((v: boolean) => void) | undefined>(undefined);
+  const opener = useRef<HTMLElement | null>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   const confirm = useCallback(
     (o: ConfirmOpts) =>
       new Promise<boolean>((resolve) => {
         resolver.current = resolve;
+        opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setOpts(o);
       }),
     []
   );
+  useEffect(() => {
+    if (!opts) {
+      if (opener.current?.isConnected) opener.current.focus();
+      opener.current = null;
+      return;
+    }
+    const focusable = dialog.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    );
+    focusable?.[0]?.focus();
+  }, [opts]);
   const close = (v: boolean) => {
     resolver.current?.(v);
     setOpts(null);
@@ -210,15 +225,37 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           aria-modal="true"
           aria-labelledby="confirm-title"
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          onKeyDown={(e) => e.key === 'Escape' && close(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              close(false);
+              return;
+            }
+            if (e.key !== 'Tab') return;
+            const focusable = dialog.current?.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+            );
+            if (!focusable?.length) {
+              e.preventDefault();
+              return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-xl">
+          <div ref={dialog} className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-xl">
             <h2 id="confirm-title" className="font-display text-lg font-semibold">
               {opts.title}
             </h2>
             <p className="mt-2 text-sm text-muted">{opts.message}</p>
             <div className="mt-5 flex justify-end gap-2">
-              <Button autoFocus onClick={() => close(false)}>
+              <Button onClick={() => close(false)}>
                 Cancel
               </Button>
               <Button variant={opts.danger ? 'danger' : 'primary'} onClick={() => close(true)}>

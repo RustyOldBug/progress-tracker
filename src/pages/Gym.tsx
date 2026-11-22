@@ -3,7 +3,7 @@ import { Check, ChevronDown, Plus, Trash2, Undo2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, DateNav, EmptyState, Field, IconButton, Input, Message, Select, Textarea, cx, useConfirm } from '../components/ui';
 import { lastExerciseSets, lastPerformance, weekDates } from '../lib/calc';
-import { addDays, formatLong, formatMedium, weekdayOf } from '../lib/dates';
+import { addDays, formatLong, formatMedium, isFutureISO, todayISO, weekdayOf } from '../lib/dates';
 import { uid } from '../lib/schema';
 import { PLAN_LABELS, routineLabel } from '../constants';
 import WorkoutProgressChart from '../components/WorkoutProgressChart';
@@ -32,6 +32,7 @@ export default function Gym() {
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const plan = profile.schedule[weekdayOf(date)];
+  const futureDate = isFutureISO(date);
   const selectedType = newType || (plan === 'rest' ? data.routines[0]?.id ?? '' : plan);
   const selectedRoutine = data.routines.find((routine) => routine.id === selectedType);
   const record = data.workouts.find((w) => w.date === date);
@@ -78,9 +79,9 @@ export default function Gym() {
     saveWorkout(workout);
     return workout;
   };
-  const create = () => { createRecord('planned', true, true); };
+  const create = () => { createRecord('planned', !futureDate, !futureDate); };
   const startRecord = () => {
-    if (!record) return;
+    if (!record || futureDate) return;
     const routine = data.routines.find((item) => item.id === record.workoutType);
     const names = routine?.exercises ?? [];
     patch({
@@ -128,7 +129,7 @@ export default function Gym() {
   };
 
   const patch = (p: Partial<WorkoutRecord> | ((workout: WorkoutRecord) => Partial<WorkoutRecord>)) =>
-    record && updateWorkout(record.id, (workout) => ({ ...workout, ...(typeof p === 'function' ? p(workout) : p) }));
+    record && !futureDate && updateWorkout(record.id, (workout) => ({ ...workout, ...(typeof p === 'function' ? p(workout) : p) }));
   const patchExercise = (id: string, fn: (e: ExerciseLog) => ExerciseLog) =>
     patch((workout) => ({ exercises: workout.exercises.map((e) => (e.id === id ? fn(e) : e)) }));
 
@@ -146,7 +147,7 @@ export default function Gym() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Gym</h1>
           <p className="text-sm text-muted">{formatLong(date)}</p>
         </div>
-        <DateNav date={date} onChange={(d) => { setSelectedDate(d); setMoving(false); setError(null); }} />
+        <DateNav date={date} onChange={(d) => { setSelectedDate(d); setNewType(''); setMoving(false); setError(null); }} />
       </header>
 
       <Card>
@@ -185,11 +186,11 @@ export default function Gym() {
                 </Field>
               </div>
             )}
-            <Button variant="primary" onClick={create} disabled={!selectedType}><Plus size={18} /> {plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
+            <Button variant="primary" onClick={create} disabled={!selectedType}><Plus size={18} /> {futureDate ? 'Schedule session' : plan === 'rest' ? 'Log a session' : 'Start session'}</Button>
           </div>
-          {plan !== 'rest' && (
+          {plan !== 'rest' && !futureDate && (
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={skipBeforeStart}>Skip session</Button>
+              <Button onClick={skipBeforeStart} disabled={futureDate}>Skip session</Button>
               <Button onClick={beginReschedule}>Reschedule</Button>
             </div>
           )}
@@ -214,8 +215,8 @@ export default function Gym() {
               <>
                 <p className="mb-3 text-sm text-muted">This session is scheduled but has not been started.</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="primary" onClick={startRecord}><Plus size={18} /> Start session</Button>
-                  <Button onClick={skipBeforeStart}>Skip session</Button>
+                  <Button variant="primary" onClick={startRecord} disabled={futureDate}><Plus size={18} /> {futureDate ? 'Scheduled' : 'Start session'}</Button>
+                  <Button onClick={skipBeforeStart} disabled={futureDate}>Skip session</Button>
                   <Button onClick={beginReschedule}>Reschedule</Button>
                 </div>
                 {moving && (
@@ -230,10 +231,10 @@ export default function Gym() {
               <div className="flex flex-wrap gap-2">
                 {record.status === 'planned' && (
                 <>
-                  <Button variant="primary" onClick={complete}><Check size={18} /> Mark completed</Button>
+                  <Button variant="primary" onClick={complete} disabled={futureDate}><Check size={18} /> Mark completed</Button>
                 </>
                 )}
-                {record.status !== 'planned' && (
+                {record.status !== 'planned' && record.status !== 'rescheduled' && (
                 <Button onClick={() => patch({ status: 'planned', rescheduledTo: undefined })}><Undo2 size={18} /> {record.status === 'completed' ? 'Undo completion' : 'Back to planned'}</Button>
                 )}
                 <Button
@@ -257,7 +258,7 @@ export default function Gym() {
             {error && <div className="mt-3"><Message tone="error">{error}</Message></div>}
           </Card>
 
-          {record.status === 'planned' && record.started !== false && <>
+          {record.status === 'planned' && record.started !== false && !futureDate && <>
           <Card>
             <CardTitle>Exercises</CardTitle>
             {record.exercises.length === 0 && <EmptyState title="No exercises yet" hint="Add one below, for example a walk or mobility work." />}
@@ -352,7 +353,7 @@ export default function Gym() {
               <ul className="divide-y divide-line">
                 {history.map((w) => (
                   <li key={w.id}>
-                    <button type="button" onClick={() => setSelectedDate(w.date)} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
+                    <button type="button" onClick={() => { setSelectedDate(w.date); setNewType(''); }} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
                       <span>
                         <span className="block font-medium">{routineLabel(w.workoutType, data.routines, w.routineName)}</span>
                         <span className="block text-sm text-muted">{formatMedium(w.date)}{w.duration ? ` · ${w.duration} min` : ''}</span>

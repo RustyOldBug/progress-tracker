@@ -101,12 +101,26 @@ export default function Backup() {
         <p className="mb-3 text-sm text-muted">
           Last backup: {data.lastBackupAt ? new Date(data.lastBackupAt).toLocaleString() : 'none yet on this device'}
         </p>
-        <Button variant="primary" onClick={exportNow}><Download size={18} /> Download backup</Button>
+        <div>
+          <Button variant="primary" onClick={exportNow}><Download size={18} /> Download backup</Button>
+          <p className="mt-2 text-sm text-muted">On iPhone, if iOS opens a share sheet, choose Save to Files to keep the backup.</p>
+        </div>
       </Card>
 
       <Card>
         <CardTitle>Restore from file</CardTitle>
-        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} aria-label="Backup file" />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            void onFile(file);
+          }}
+          aria-label="Backup file"
+        />
         <Button onClick={() => fileRef.current?.click()}><Upload size={18} /> Choose backup file</Button>
 
         {pending && (

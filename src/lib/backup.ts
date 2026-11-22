@@ -1,5 +1,5 @@
 import type { AppData } from '../types';
-import { isValidISO, todayISO } from './dates';
+import { isFutureISO, isValidISO, todayISO } from './dates';
 import { isObj, migrate, SCHEMA_VERSION } from './schema';
 import { DEFAULT_ROUTINES, MEALS } from '../constants';
 
@@ -52,9 +52,13 @@ function validateData(d: Record<string, unknown>): string | null {
     if (!finite(d.profile[k])) return `Profile field "${k}" is missing or not a number.`;
   }
   if (!Array.isArray(d.weights)) return 'The backup has no weight history list.';
+  const weightDates = new Set<string>();
   for (const [i, w] of d.weights.entries()) {
     if (!isObj(w) || !isValidISO(w.date) || !finite(w.weight) || w.weight <= 0 || w.weight > 500)
       return `Weight entry ${i + 1} is invalid.`;
+    if (isFutureISO(w.date)) return `Weight entry ${i + 1} is dated in the future.`;
+    if (weightDates.has(w.date)) return `The backup contains more than one weigh-in for ${w.date}.`;
+    weightDates.add(w.date);
     if (w.waist != null && (!finite(w.waist) || w.waist <= 0)) return `Weight entry ${i + 1} has an invalid waist value.`;
   }
   if (!Array.isArray(d.foods)) return 'The backup has no food entries list.';
@@ -62,6 +66,7 @@ function validateData(d: Record<string, unknown>): string | null {
     if (
       !isObj(f) ||
       !isValidISO(f.date) ||
+      isFutureISO(f.date) ||
       typeof f.foodName !== 'string' ||
       !MEALS.includes(f.meal as never) ||
       !finite(f.calories) ||
@@ -74,6 +79,7 @@ function validateData(d: Record<string, unknown>): string | null {
   if (!isObj(d.daily)) return 'The backup has no daily records section.';
   for (const [date, r] of Object.entries(d.daily)) {
     if (!isValidISO(date) || !isObj(r) || !isObj(r.checklist)) return `Daily record "${date}" is invalid.`;
+    if (isFutureISO(date)) return `Daily record "${date}" is dated in the future.`;
     if (r.steps != null && !finite(r.steps)) return `Daily record "${date}" has invalid steps.`;
     if (r.water != null && !finite(r.water)) return `Daily record "${date}" has invalid water.`;
   }
@@ -105,6 +111,8 @@ function validateData(d: Record<string, unknown>): string | null {
       !Array.isArray(w.exercises)
     )
       return `Workout ${i + 1} is invalid.`;
+    if (isFutureISO(w.date) && (w.status === 'completed' || w.started === true))
+      return `Workout ${i + 1} is marked as started or completed in the future.`;
   }
   return null;
 }

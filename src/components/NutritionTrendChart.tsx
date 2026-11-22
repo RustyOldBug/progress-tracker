@@ -105,7 +105,7 @@ export default function NutritionTrendChart({
                 <span className="sm:hidden">Avg. prot. / day</span>
                 <span className="hidden sm:inline">Avg. protein / day</span>
               </p>
-              <p className="font-semibold tabular-nums">{fmt(proteinAverage ?? 0)} g</p>
+              <p className="font-semibold tabular-nums">{fmt(proteinAverage ?? 0, 1)} g</p>
             </div>
           </div>
           <div className="mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
@@ -153,7 +153,7 @@ export default function NutritionTrendChart({
                   formatter={(value, name) => {
                     const isCalories = name === 'calories' || name === 'Calories';
                     return [
-                      isCalories ? `${fmt(Number(value))} kcal` : `${fmt(Number(value))} g`,
+                      isCalories ? `${fmt(Number(value))} kcal` : `${fmt(Number(value), 1)} g`,
                       isCalories ? 'Calories' : 'Protein',
                     ];
                   }}

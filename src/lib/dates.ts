@@ -4,6 +4,7 @@ export function toISO(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 export const todayISO = () => toISO(new Date());
+export const isFutureISO = (iso: string) => isValidISO(iso) && iso > todayISO();
 
 export function parseISO(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number);

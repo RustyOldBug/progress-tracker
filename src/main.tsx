@@ -4,10 +4,10 @@ import '@fontsource-variable/bricolage-grotesque';
 import '@fontsource-variable/figtree';
 import './index.css';
 import App from './App';
-import { applyTheme } from './lib/theme';
+import { applyTheme, applySystemTheme } from './lib/theme';
 
 applyTheme();
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -17,7 +17,8 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+    navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true });
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' }).catch(() => {
       /* offline support is optional */
     });
   });

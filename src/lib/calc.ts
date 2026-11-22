@@ -1,14 +1,16 @@
 import type { AppData, DailyRecord, FoodEntry, SetLog, WeightEntry, WorkoutRecord } from '../types';
 import { CHECKLIST_ITEMS } from '../constants';
-import { addDays, daysBetween, startOfWeek } from './dates';
+import { addDays, daysBetween, startOfWeek, todayISO } from './dates';
 import { clamp } from './format';
 
 export const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 export const avg = (a: number[]): number | null => (a.length ? sum(a) / a.length : null);
 
 export const sortedWeights = (w: WeightEntry[]) => [...w].sort((a, b) => a.date.localeCompare(b.date));
+export const firstWeight = (w: WeightEntry[]): WeightEntry | null =>
+  sortedWeights(w.filter((entry) => entry.date <= todayISO()))[0] ?? null;
 export const latestWeight = (w: WeightEntry[]): WeightEntry | null => {
-  const s = sortedWeights(w);
+  const s = sortedWeights(w.filter((entry) => entry.date <= todayISO()));
   return s.length ? s[s.length - 1] : null;
 };
 
@@ -44,9 +46,10 @@ export function weeklyWeightChange(weights: WeightEntry[], weekStart: string): n
 }
 
 /** Average change per week across all weeks that have entries (null with fewer than two weeks). */
-export function avgWeeklyChange(weights: WeightEntry[]): number | null {
+export function avgWeeklyChange(weights: WeightEntry[], asOfDate = todayISO()): number | null {
   const weeks = new Map<string, number[]>();
-  for (const w of weights) {
+  const completedWeekStart = startOfWeek(asOfDate);
+  for (const w of weights.filter((entry) => entry.date < completedWeekStart)) {
     const k = startOfWeek(w.date);
     weeks.set(k, [...(weeks.get(k) ?? []), w.weight]);
   }

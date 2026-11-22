@@ -1,6 +1,5 @@
-// Minimal offline support: cache same-origin GET requests as they are used,
-// serve from cache first and refresh in the background.
-const CACHE = 'wlt-shell-v1';
+// Prefer fresh assets while online and fall back to the cache when offline.
+const CACHE = 'wlt-shell-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -24,17 +23,14 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => cached || caches.match('./index.html'));
-      return cached || network;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(async () => (await caches.match(req)) || caches.match('./index.html'))
   );
 });

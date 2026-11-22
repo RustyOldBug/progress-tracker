@@ -21,7 +21,7 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
     const series = trendSeries(sortedWeights(weights));
     const days = RANGES.find((r) => r.id === range)?.days ?? null;
     const from = days ? addDays(todayISO(), -(days - 1)) : '0000-00-00';
-    return series.filter((p) => p.date >= from).map((p) => ({ ...p, t: daysBetween(EPOCH, p.date) }));
+    return series.filter((p) => p.date >= from && p.date <= todayISO()).map((p) => ({ ...p, t: daysBetween(EPOCH, p.date) }));
   }, [weights, range]);
 
   const { start: startW, target: targetW } = { start: profile.startingWeight, target: profile.targetWeight };
@@ -36,6 +36,9 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
   const tMin = points.length ? points[0].t : 0;
   const tMax = points.length ? points[points.length - 1].t : 1;
   const pad = tMin === tMax ? 3 : 0;
+  const xTicks = points
+    .filter((_, index) => points.length <= 5 || index % Math.ceil((points.length - 1) / 4) === 0 || index === points.length - 1)
+    .map((point) => point.t);
 
   return (
     <div>
@@ -69,7 +72,7 @@ export default function WeightChart({ weights, profile }: { weights: WeightEntry
                 dataKey="t"
                 type="number"
                 domain={[tMin - pad, tMax + pad]}
-                tickCount={5}
+                ticks={xTicks}
                 tickFormatter={(t) => formatShort(addDays(EPOCH, Number(t)))}
                 tick={{ fontSize: 12, fill: 'rgb(var(--muted))' }}
                 stroke="rgb(var(--line))"

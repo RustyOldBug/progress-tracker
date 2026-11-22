@@ -35,6 +35,11 @@ export function applyTheme() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', `rgb(${background})`);
 }
 
+export function applySystemTheme() {
+  applyTheme();
+  listeners.forEach((listener) => listener());
+}
+
 export function setMode(m: ThemeMode) {
   try {
     localStorage.setItem(KEY, m);

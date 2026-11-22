@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AppData, ChecklistKey, DailyRecord, FoodEntry, UserProfile, WeightEntry, WorkoutRecord, WorkoutRoutine } from './types';
 import { defaultProfile } from './constants';
 import { todayISO, addDays } from './lib/dates';
@@ -76,6 +76,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(initial.data);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayISO());
+  const lastToday = useRef(todayISO());
+
+  useEffect(() => {
+    const refreshToday = () => {
+      const currentToday = todayISO();
+      if (currentToday === lastToday.current) return;
+      const previousToday = lastToday.current;
+      lastToday.current = currentToday;
+      setSelectedDate((current) => current === previousToday ? currentToday : current);
+    };
+    const interval = window.setInterval(refreshToday, 60_000);
+    window.addEventListener('focus', refreshToday);
+    document.addEventListener('visibilitychange', refreshToday);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshToday);
+      document.removeEventListener('visibilitychange', refreshToday);
+    };
+  }, []);
 
   // Auto-save on every change.
   useEffect(() => {
@@ -104,8 +123,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const upsertById = <T extends { id: string }>(list: T[], item: T) =>
     list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
 
-  const updateDaily: Store['updateDaily'] = (date, fn) =>
+  const updateDaily: Store['updateDaily'] = (date, fn) => {
+    if (date > todayISO()) return;
     setData((d) => ({ ...d, daily: { ...d.daily, [date]: fn(d.daily[date] ?? emptyDaily(date)) } }));
+  };
 
   const store: Store = {
     data,
@@ -117,12 +138,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     resetProfile: () => setData((d) => ({ ...d, profile: { ...defaultProfile(), startDate: d.profile.startDate } })),
     saveWeight: (e) =>
       setData((d) => {
+        if (e.date > todayISO()) return d;
         const existing = d.weights.find((w) => w.date === e.date);
         return { ...d, weights: upsertById(d.weights, { id: existing?.id ?? uid(), ...e }) };
       }),
     deleteWeight: (id) => setData((d) => ({ ...d, weights: d.weights.filter((w) => w.id !== id) })),
-    addFood: (f) => setData((d) => ({ ...d, foods: [...d.foods, { id: uid(), ...f }] })),
-    updateFood: (id, f) => setData((d) => ({ ...d, foods: d.foods.map((x) => (x.id === id ? { id, ...f } : x)) })),
+    addFood: (f) => setData((d) => f.date > todayISO() ? d : ({ ...d, foods: [...d.foods, { id: uid(), ...f }] })),
+    updateFood: (id, f) => setData((d) => f.date > todayISO()
+      ? d
+      : ({ ...d, foods: d.foods.map((x) => (x.id === id ? { id, ...f } : x)) })),
     deleteFood: (id) => setData((d) => ({ ...d, foods: d.foods.filter((f) => f.id !== id) })),
     updateDaily,
     toggleCheck: (date, key) =>

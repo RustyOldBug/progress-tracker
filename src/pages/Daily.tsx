@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, DateNav, Input, ProgressBar, Textarea, cx, useConfirm } from '../components/ui';
 import { checkedCount, completionPct, dayTotals } from '../lib/calc';
-import { formatLong, todayISO } from '../lib/dates';
+import { formatLong, isFutureISO, todayISO } from '../lib/dates';
 import { emptyDaily } from '../lib/schema';
 import { fmt } from '../lib/format';
 import { CHECKLIST_ITEMS } from '../constants';
@@ -13,6 +13,7 @@ export default function Daily() {
   const { data, selectedDate: date, setSelectedDate, toggleCheck, updateDaily, addWater } = useStore();
   const confirm = useConfirm();
   const { profile } = data;
+  const futureDate = isFutureISO(date);
   const rec = data.daily[date] ?? emptyDaily(date);
   const totals = dayTotals(data.foods, date);
   const hasWeight = data.weights.some((w) => w.date === date);
@@ -22,7 +23,7 @@ export default function Daily() {
 
   const hints: Partial<Record<ChecklistKey, string>> = {
     calories: totals.count ? `${fmt(totals.calories)} / ${fmt(profile.calorieTarget)} kcal logged` : 'No food logged yet',
-    protein: `${fmt(totals.protein)} / ${fmt(profile.proteinTarget)} g logged`,
+    protein: `${fmt(totals.protein, 1)} / ${fmt(profile.proteinTarget)} g logged`,
     steps: `${fmt(rec.steps ?? 0)} / ${fmt(profile.stepsTarget)} steps`,
     gym: workout ? `Session status: ${workout.status}` : 'No session recorded',
     water: `${fmt(rec.water / 1000, 2)} / ${fmt(profile.waterTargetMl / 1000, 1)} L`,
@@ -46,6 +47,7 @@ export default function Daily() {
         </div>
         <DateNav date={date} onChange={setSelectedDate} />
       </header>
+      {futureDate && <p className="rounded-xl border border-warn/40 bg-warn-soft px-4 py-3 text-sm">Future dates are view-only. Daily logs can be entered on or before today.</p>}
 
       <Card>
         <CardTitle right={<span className="text-sm tabular-nums text-muted">{checkedCount(rec)} / {CHECKLIST_ITEMS.length} · {fmt(pct)}%</span>}>
@@ -61,6 +63,8 @@ export default function Daily() {
                   type="button"
                   role="checkbox"
                   aria-checked={on}
+                  aria-disabled={futureDate}
+                  disabled={futureDate}
                   onClick={() => toggleCheck(date, key)}
                   className={cx(
                     'flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 text-left transition',
@@ -99,8 +103,8 @@ export default function Daily() {
               : `${fmt(profile.waterTargetMl - rec.water)} ml to go.`}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button onClick={() => addWater(date, 250)}>+ 250 ml</Button>
-            <Button onClick={() => addWater(date, 500)}>+ 500 ml</Button>
+            <Button disabled={futureDate} onClick={() => addWater(date, 250)}>+ 250 ml</Button>
+            <Button disabled={futureDate} onClick={() => addWater(date, 500)}>+ 500 ml</Button>
           </div>
           <div className="mt-2 flex gap-2">
             <Input
@@ -113,13 +117,15 @@ export default function Daily() {
               onChange={(e) => setCustom(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addCustom()}
               aria-label="Custom water amount in millilitres"
+              disabled={futureDate}
             />
-            <Button onClick={addCustom} disabled={!custom}>Add</Button>
+            <Button onClick={addCustom} disabled={!custom || futureDate}>Add</Button>
           </div>
           {rec.water > 0 && (
             <Button
               variant="ghost"
               className="mt-2 w-full"
+              disabled={futureDate}
               onClick={async () => {
                 if (await confirm({ title: 'Reset water?', message: `Set water for ${formatLong(date)} back to 0.`, confirmLabel: 'Reset', danger: true }))
                   updateDaily(date, (r) => ({ ...r, water: 0 }));
@@ -146,6 +152,7 @@ export default function Daily() {
               inputMode="numeric"
               min={0}
               max={200000}
+              disabled={futureDate}
               value={rec.steps ?? ''}
               placeholder="Enter total steps"
               onChange={(e) => {
@@ -162,6 +169,7 @@ export default function Daily() {
         <CardTitle>Notes</CardTitle>
         <Textarea
           rows={3}
+          disabled={futureDate}
           placeholder="How did the day go?"
           value={rec.notes}
           onChange={(e) => updateDaily(date, (r) => ({ ...r, notes: e.target.value }))}

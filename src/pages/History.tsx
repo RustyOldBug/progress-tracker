@@ -59,7 +59,7 @@ export default function HistoryPage() {
                       {[
                         ['Weight', w ? `${fmt(w.weight, 1)} kg` : '–'],
                         ['Calories', t.count ? `${fmt(t.calories)} kcal` : '–'],
-                        ['Protein', t.count ? `${fmt(t.protein)} g` : '–'],
+                        ['Protein', t.count ? `${fmt(t.protein, 1)} g` : '–'],
                         ['Steps', r?.steps != null ? fmt(r.steps) : '–'],
                         ['Water', r && r.water > 0 ? `${fmt(r.water / 1000, 2)} L` : '–'],
                         ['Gym', g ? `${routineLabel(g.workoutType, data.routines, g.routineName)} (${g.status})` : '–'],

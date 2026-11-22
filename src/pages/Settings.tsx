@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, Field, Input, Message, PageHeader, Select, useConfirm } from '../components/ui';
-import { isValidISO, WEEKDAY_NAMES } from '../lib/dates';
+import { isValidISO, todayISO, WEEKDAY_NAMES } from '../lib/dates';
 import { setMode, setPalette, useThemeMode, useThemePalette, type ThemeMode, type ThemePalette } from '../lib/theme';
 import { DEFAULT_ROUTINES, defaultProfile } from '../constants';
 import { uid } from '../lib/schema';
@@ -72,6 +72,7 @@ export default function SettingsPage() {
     if (nums.targetWeight != null && nums.startingWeight != null && nums.targetWeight >= nums.startingWeight)
       errs.push('Target weight must be lower than starting weight.');
     if (!isValidISO(draft.startDate)) errs.push('Start date must be a valid date.');
+    else if (draft.startDate > todayISO()) errs.push('Start date cannot be in the future.');
     const routineNames = draft.routines.map((routine) => routine.name.trim().toLocaleLowerCase());
     if (draft.routines.some((routine) => !routine.name.trim())) errs.push('Every workout routine needs a name.');
     if (new Set(routineNames).size !== routineNames.length) errs.push('Workout routine names must be unique.');
@@ -141,7 +142,7 @@ export default function SettingsPage() {
               {['Male', 'Female', 'Other'].map((g) => <option key={g}>{g}</option>)}
             </Select>
           </Field>
-          <Field label="Start date" hint="Used for the day count on the dashboard.">
+          <Field label="Start date" hint="The dashboard day count starts here. Set this to the date you actually began tracking.">
             <Input type="date" value={draft.startDate} onChange={(e) => set('startDate', e.target.value)} />
           </Field>
           {RANGES.slice(0, 5).map(([k, label, lo, hi]) => (

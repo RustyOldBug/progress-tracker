@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, EmptyState, Field, IconButton, Input, Message, PageHeader, Textarea, useConfirm } from '../components/ui';
 import WeightChart from '../components/WeightChart';
-import { avgWeeklyChange, latestWeight, sortedWeights } from '../lib/calc';
-import { formatMedium, isValidISO, todayISO } from '../lib/dates';
+import { avgWeeklyChange, firstWeight, latestWeight, sortedWeights } from '../lib/calc';
+import { formatMedium, isFutureISO, isValidISO, todayISO } from '../lib/dates';
 import { fmt, fmtKg, fmtSigned } from '../lib/format';
 
 export default function Weight() {
@@ -17,20 +17,46 @@ export default function Weight() {
   const [waist, setWaist] = useState(() => initialEntry?.waist != null ? String(initialEntry.waist) : '');
   const [notes, setNotes] = useState(() => initialEntry?.notes ?? '');
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const lastToday = useRef(todayISO());
+
+  useEffect(() => {
+    const refreshToday = () => {
+      const currentToday = todayISO();
+      if (currentToday === lastToday.current) return;
+      const previousToday = lastToday.current;
+      lastToday.current = currentToday;
+      setDate((current) => current === previousToday ? currentToday : current);
+    };
+    const interval = window.setInterval(refreshToday, 60_000);
+    window.addEventListener('focus', refreshToday);
+    document.addEventListener('visibilitychange', refreshToday);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshToday);
+      document.removeEventListener('visibilitychange', refreshToday);
+    };
+  }, []);
 
   const existing = data.weights.find((w) => w.date === date);
-  const asc = sortedWeights(data.weights);
+  const asc = sortedWeights(data.weights.filter((entry) => entry.date <= todayISO()));
   const rows = [...asc].reverse();
   const latest = latestWeight(data.weights);
+  const first = firstWeight(data.weights);
   const latestWaist = [...asc].reverse().find((w) => w.waist != null)?.waist ?? null;
   const weekly = avgWeeklyChange(data.weights);
 
-  const load = (d: string) => {
+  const load = (d: string, preserveDraftForEmptyDate = false) => {
     setDate(d);
     const e = data.weights.find((w) => w.date === d);
-    setWeight(e ? String(e.weight) : '');
-    setWaist(e?.waist != null ? String(e.waist) : '');
-    setNotes(e?.notes ?? '');
+    if (e) {
+      setWeight(String(e.weight));
+      setWaist(e.waist != null ? String(e.waist) : '');
+      setNotes(e.notes);
+    } else if (!preserveDraftForEmptyDate) {
+      setWeight('');
+      setWaist('');
+      setNotes('');
+    }
     setMsg(null);
   };
 
@@ -39,6 +65,7 @@ export default function Weight() {
     const w = Number(weight);
     const ws = waist.trim() === '' ? null : Number(waist);
     if (!isValidISO(date)) return setMsg({ tone: 'error', text: 'Choose a valid date.' });
+    if (isFutureISO(date)) return setMsg({ tone: 'error', text: 'A weigh-in cannot be dated in the future.' });
     if (!weight || !Number.isFinite(w) || w < 20 || w > 400)
       return setMsg({ tone: 'error', text: 'Enter a weight between 20 and 400 kg.' });
     if (ws != null && (!Number.isFinite(ws) || ws < 30 || ws > 250))
@@ -61,7 +88,7 @@ export default function Weight() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           ['Current', fmtKg(latest?.weight)],
-          ['Total lost', fmtKg(latest ? profile.startingWeight - latest.weight : null)],
+          ['Lost since first weigh-in', fmtKg(latest && first ? first.weight - latest.weight : null)],
           ['Average per week', weekly == null ? '–' : `${fmtSigned(weekly)} kg`],
           ['Waist', latestWaist == null ? '–' : `${fmt(latestWaist, 1)} cm`],
         ].map(([k, v]) => (
@@ -71,13 +98,13 @@ export default function Weight() {
           </Card>
         ))}
       </div>
-      {weekly == null && <p className="text-sm text-muted">The weekly average appears once you have weigh-ins in two different weeks.</p>}
+      {weekly == null && <p className="text-sm text-muted">Average weekly change appears after weigh-ins in two completed weeks; the current partial week is excluded.</p>}
 
       <Card>
         <CardTitle>{existing ? 'Edit entry' : 'Log weight'}</CardTitle>
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
           <Field label="Date">
-            <Input type="date" value={date} onChange={(e) => e.target.value && load(e.target.value)} required />
+            <Input type="date" value={date} max={todayISO()} onChange={(e) => e.target.value && load(e.target.value, true)} required />
           </Field>
           <Field label="Morning weight (kg)">
             <Input type="number" inputMode="decimal" step="0.1" min={20} max={400} value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g. 101.4" required />

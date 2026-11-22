@@ -125,13 +125,14 @@ export default function Layout({ route, children }: { route: string; children: R
             href={`#${path}`}
             onClick={() => setMoreOpen(false)}
             aria-current={route === path ? 'page' : undefined}
+            aria-label={label}
             className={cx(
               'flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium',
               route === path ? 'text-accent' : 'text-muted'
             )}
           >
             <Icon size={22} />
-            {label === 'Daily Tracker' ? 'Daily' : label}
+            {label === 'Dashboard' ? 'Home' : label === 'Daily Tracker' ? 'Daily' : label === 'Nutrition' ? 'Food' : label}
           </a>
         ))}
         <button

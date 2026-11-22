@@ -3,7 +3,7 @@ import { Pencil, Trash2, X } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, cx, DateNav, EmptyState, Field, IconButton, Input, Message, ProgressBar, Select, useConfirm } from '../components/ui';
 import { dayTotals, sum } from '../lib/calc';
-import { formatLong } from '../lib/dates';
+import { formatLong, isFutureISO } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { MEALS } from '../constants';
 import NutritionTrendChart from '../components/NutritionTrendChart';
@@ -13,6 +13,7 @@ export default function Nutrition() {
   const { data, selectedDate: date, setSelectedDate, addFood, updateFood, deleteFood } = useStore();
   const confirm = useConfirm();
   const { profile } = data;
+  const futureDate = isFutureISO(date);
   const [name, setName] = useState('');
   const [meal, setMeal] = useState<MealType>('Breakfast');
   const [kcal, setKcal] = useState('');
@@ -91,6 +92,7 @@ export default function Nutrition() {
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
+    if (futureDate) return setError('Food entries cannot be dated in the future.');
     const c = Number(kcal);
     const p = protein.trim() === '' ? 0 : Number(protein);
     if (!name.trim()) return setError('Enter a food name.');
@@ -124,6 +126,7 @@ export default function Nutrition() {
         </div>
         <DateNav date={date} onChange={(d) => { setSelectedDate(d); reset(); }} />
       </header>
+      {futureDate && <p className="rounded-xl border border-warn/40 bg-warn-soft px-4 py-3 text-sm">Future dates are view-only. Food entries can be added on or before today.</p>}
 
       <Card>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -140,7 +143,7 @@ export default function Nutrition() {
           <div>
             <div className="flex items-baseline justify-between">
               <p className="font-medium">Protein</p>
-              <p className="tabular-nums text-muted"><span className="font-display text-2xl font-bold text-ink">{fmt(totals.protein)}</span> / {fmt(profile.proteinTarget)} g</p>
+              <p className="tabular-nums text-muted"><span className="font-display text-2xl font-bold text-ink">{fmt(totals.protein, 1)}</span> / {fmt(profile.proteinTarget)} g</p>
             </div>
             <div className="my-2"><ProgressBar value={totals.protein} max={profile.proteinTarget} /></div>
             <p className="text-sm text-muted">{protLeft <= 0 ? 'Protein target reached' : `${fmt(protLeft)} g remaining`}</p>
@@ -172,6 +175,7 @@ export default function Nutrition() {
                 <button
                   key={f.id}
                   type="button"
+                  disabled={futureDate}
                   onClick={() => selectSavedFood(f)}
                   className="min-h-9 rounded-full border border-line px-3 text-sm hover:bg-bg"
                 >
@@ -182,6 +186,7 @@ export default function Nutrition() {
           </div>
         )}
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+          <fieldset disabled={futureDate} className="contents">
           <div className="sm:col-span-2">
             <Field label="Food name">
               <div className="relative">
@@ -228,7 +233,7 @@ export default function Nutrition() {
                       >
                         <span className="block truncate font-medium">{food.foodName}</span>
                         <span className="block text-xs text-muted">
-                          {food.meal} · {fmt(food.calories)} kcal · {fmt(food.protein)} g protein
+                          {food.meal} · {fmt(food.calories)} kcal · {fmt(food.protein, 1)} g protein
                         </span>
                       </li>
                     ))}
@@ -252,8 +257,9 @@ export default function Nutrition() {
           </div>
           <div className="space-y-2 sm:col-span-2">
             {error && <Message tone="error">{error}</Message>}
-            <Button type="submit" variant="primary" className="w-full sm:w-auto">{editing ? 'Save changes' : 'Add food'}</Button>
+            <Button type="submit" variant="primary" className="w-full sm:w-auto" disabled={futureDate}>{editing ? 'Save changes' : 'Add food'}</Button>
           </div>
+          </fieldset>
         </form>
       </Card>
 
@@ -270,19 +276,20 @@ export default function Nutrition() {
                 <div key={m}>
                   <div className="mb-1 flex items-baseline justify-between">
                     <h3 className="font-display font-semibold">{m}</h3>
-                    <span className="text-sm tabular-nums text-muted">{fmt(sum(list.map((f) => f.calories)))} kcal · {fmt(sum(list.map((f) => f.protein)))} g protein</span>
+                    <span className="text-sm tabular-nums text-muted">{fmt(sum(list.map((f) => f.calories)))} kcal · {fmt(sum(list.map((f) => f.protein)), 1)} g protein</span>
                   </div>
                   <ul className="divide-y divide-line">
                     {list.map((f) => (
                       <li key={f.id} className="flex items-center justify-between gap-2 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate font-medium">{f.foodName}</p>
-                          <p className="text-sm tabular-nums text-muted">{fmt(f.calories)} kcal · {fmt(f.protein)} g protein</p>
+                          <p className="text-sm tabular-nums text-muted">{fmt(f.calories)} kcal · {fmt(f.protein, 1)} g protein</p>
                         </div>
                         <div className="flex shrink-0">
-                          <IconButton label={`Edit ${f.foodName}`} onClick={() => startEdit(f.id)}><Pencil size={18} /></IconButton>
+                          <IconButton label={`Edit ${f.foodName}`} disabled={futureDate} onClick={() => startEdit(f.id)}><Pencil size={18} /></IconButton>
                           <IconButton
                             label={`Delete ${f.foodName}`}
+                            disabled={futureDate}
                             onClick={async () => {
                               if (await confirm({ title: 'Delete this food?', message: `${f.foodName} will be removed from ${m}.`, confirmLabel: 'Delete', danger: true })) {
                                 deleteFood(f.id);

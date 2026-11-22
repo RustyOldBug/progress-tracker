@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Beef, CalendarCheck, ChevronLeft, ChevronRight, Droplets, Dumbbell, Flame, Footprints } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, ProgressBar } from '../components/ui';
-import { checkedCount, completionPct, dayTotals, latestWeight, periodOverview, progressPct } from '../lib/calc';
+import { checkedCount, completionPct, dayTotals, firstWeight, latestWeight, periodOverview, progressPct } from '../lib/calc';
 import { addDays, daysBetween, formatLong, formatShort, parseISO, todayISO, weekdayOf } from '../lib/dates';
 import { fmt, fmtKg } from '../lib/format';
 import { CHECKLIST_ITEMS, PLAN_LABELS, routineLabel } from '../constants';
@@ -18,7 +18,10 @@ function Journey({ start, target, current }: { start: number; target: number; cu
     <div className="mt-6 px-2">
       <div className="relative h-14">
         {current != null && (
-          <div className="absolute top-0 -translate-x-1/2 text-center" style={{ left: `${here}%` }}>
+          <div
+            className={`absolute top-0 text-center ${here <= 8 ? 'left-0' : here >= 92 ? 'right-0' : '-translate-x-1/2'}`}
+            style={here > 8 && here < 92 ? { left: `${here}%` } : undefined}
+          >
             <div className="rounded-lg bg-ink px-2 py-0.5 text-xs font-semibold text-surface">{fmt(current, 1)}</div>
           </div>
         )}
@@ -88,8 +91,9 @@ export default function Dashboard() {
   const { profile } = data;
   const today = todayISO();
   const latest = latestWeight(data.weights);
+  const first = firstWeight(data.weights);
   const current = latest?.weight ?? null;
-  const lost = current == null ? null : profile.startingWeight - current;
+  const lost = current == null || first == null ? null : first.weight - current;
   const remaining = current == null ? null : current - profile.targetWeight;
   const progress = current == null ? 0 : progressPct(profile.startingWeight, current, profile.targetWeight);
   const dayNo = Math.max(1, daysBetween(profile.startDate, today) + 1);
@@ -138,12 +142,14 @@ export default function Dashboard() {
             <p className="mt-2 text-sm text-muted">
               {current == null
                 ? 'No weigh-in yet. Log your first one on the Weight page.'
-                : `${fmt(remaining, 1)} kg to go to reach ${fmt(profile.targetWeight, 1)} kg`}
+                : current > profile.startingWeight
+                  ? `${fmt(current - profile.startingWeight, 1)} kg above your starting weight`
+                  : `${fmt(remaining, 1)} kg to go to reach ${fmt(profile.targetWeight, 1)} kg`}
             </p>
           </div>
           <dl className="grid grid-cols-3 gap-x-6 text-sm">
             <div>
-              <dt className="text-muted">Lost</dt>
+              <dt className="text-muted">Lost since first weigh-in</dt>
               <dd className="font-display text-xl font-semibold tabular-nums">{fmtKg(lost)}</dd>
             </div>
             <div>
@@ -152,7 +158,7 @@ export default function Dashboard() {
             </div>
             <div>
               <dt className="text-muted">Progress</dt>
-              <dd className="font-display text-xl font-semibold tabular-nums">{fmt(progress, 0)}%</dd>
+              <dd className="font-display text-xl font-semibold tabular-nums">{current != null && current > profile.startingWeight ? `${fmt(current - profile.startingWeight, 1)} kg above start` : `${fmt(progress, 0)}%`}</dd>
             </div>
           </dl>
         </div>
@@ -257,7 +263,7 @@ export default function Dashboard() {
           <dl className="divide-y divide-line text-sm">
             {[
             ['calories', <><span className="sm:hidden">Avg. cal</span><span className="hidden sm:inline">Average calories</span></>, trends.calories == null ? '–' : `${fmt(trends.calories)} kcal`, `${trends.foodDays} days logged`],
-            ['protein', <><span className="sm:hidden">Avg. protein</span><span className="hidden sm:inline">Average protein</span></>, trends.protein == null ? '–' : `${fmt(trends.protein)} g`, `${trends.foodDays} days logged`],
+            ['protein', <><span className="sm:hidden">Avg. protein</span><span className="hidden sm:inline">Average protein</span></>, trends.protein == null ? '–' : `${fmt(trends.protein, 1)} g`, `${trends.foodDays} days logged`],
             ['steps', <><span className="sm:hidden">Avg. steps</span><span className="hidden sm:inline">Average steps</span></>, fmt(trends.steps), trends.steps == null ? 'no steps logged' : `${trends.stepDays} days logged`],
             ['water', <><span className="sm:hidden">Avg. water</span><span className="hidden sm:inline">Average water</span></>, trends.water == null ? '–' : `${fmt(trends.water, 2)} L`, `${trends.waterDays} days logged`],
             ['gym', <><span className="sm:hidden">Gym</span><span className="hidden sm:inline">Gym sessions</span></>, `${trends.gym} completed`, ''],
