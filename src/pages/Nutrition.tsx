@@ -6,6 +6,7 @@ import { dayTotals, sum } from '../lib/calc';
 import { formatLong } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { MEALS } from '../constants';
+import NutritionTrendChart from '../components/NutritionTrendChart';
 import type { MealType } from '../types';
 
 export default function Nutrition() {
@@ -107,6 +108,15 @@ export default function Nutrition() {
         <p className="mt-4 text-xs text-muted">
           Planned daily deficit: {fmt(profile.tdee - profile.calorieTarget)} kcal (TDEE {fmt(profile.tdee)} − target {fmt(profile.calorieTarget)}).
         </p>
+      </Card>
+
+      <Card>
+        <CardTitle>Nutrition patterns</CardTitle>
+        <NutritionTrendChart
+          foods={data.foods}
+          calorieTarget={profile.calorieTarget}
+          proteinTarget={profile.proteinTarget}
+        />
       </Card>
 
       <Card>

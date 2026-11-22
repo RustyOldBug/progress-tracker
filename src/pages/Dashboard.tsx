@@ -3,10 +3,9 @@ import type { ReactNode } from 'react';
 import { Beef, CalendarCheck, ChevronLeft, ChevronRight, Droplets, Dumbbell, Flame, Footprints } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, ProgressBar } from '../components/ui';
-import WeightChart from '../components/WeightChart';
 import { checkedCount, completionPct, dayTotals, latestWeight, periodOverview, progressPct } from '../lib/calc';
-import { addDays, addMonths, daysBetween, endOfMonth, formatLong, formatShort, parseISO, startOfMonth, startOfWeek, todayISO, weekdayOf } from '../lib/dates';
-import { fmt, fmtKg, fmtSigned } from '../lib/format';
+import { addDays, daysBetween, formatLong, formatShort, parseISO, todayISO, weekdayOf } from '../lib/dates';
+import { fmt, fmtKg } from '../lib/format';
 import { CHECKLIST_ITEMS, PLAN_LABELS, routineLabel } from '../constants';
 
 function Journey({ start, target, current }: { start: number; target: number; current: number | null }) {
@@ -84,7 +83,7 @@ function Meter({
 
 export default function Dashboard() {
   const { data, addWater } = useStore();
-  const [trendPeriod, setTrendPeriod] = useState<'week' | 'month'>('week');
+  const [trendPeriod, setTrendPeriod] = useState<'7' | '30'>('7');
   const [trendDate, setTrendDate] = useState(todayISO());
   const { profile } = data;
   const today = todayISO();
@@ -110,19 +109,18 @@ export default function Dashboard() {
     : plan === 'rest'
       ? 'Rest day'
       : `${PLAN_LABELS[plan] ?? routineLabel(plan, data.routines)} not started`;
-  const periodStart = trendPeriod === 'week' ? startOfWeek(trendDate) : startOfMonth(trendDate);
-  const periodEnd = trendPeriod === 'week' ? addDays(periodStart, 6) : endOfMonth(trendDate);
-  const previousStart = trendPeriod === 'week' ? addDays(periodStart, -7) : addMonths(periodStart, -1);
+  const periodLength = Number(trendPeriod);
+  const periodEnd = trendDate;
+  const periodStart = addDays(periodEnd, -(periodLength - 1));
+  const previousStart = addDays(periodStart, -periodLength);
   const previousEnd = addDays(periodStart, -1);
   const trends = periodOverview(data, periodStart, periodEnd, previousStart, previousEnd);
-  const currentPeriodStart = trendPeriod === 'week' ? startOfWeek(today) : startOfMonth(today);
+  const nextDisabled = periodEnd >= today;
   const periodStartYear = parseISO(periodStart).getFullYear();
   const periodEndYear = parseISO(periodEnd).getFullYear();
-  const periodTitle = trendPeriod === 'week'
-    ? `${formatShort(periodStart)} – ${formatShort(periodEnd)}, ${
-        periodStartYear === periodEndYear ? periodEndYear : `${periodStartYear}–${periodEndYear}`
-      }`
-    : parseISO(periodStart).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const periodTitle = `${formatShort(periodStart)} – ${formatShort(periodEnd)}, ${
+    periodStartYear === periodEndYear ? periodEndYear : `${periodStartYear}–${periodEndYear}`
+  }`;
   const kcalLeft = profile.calorieTarget - totals.calories;
 
   return (
@@ -215,34 +213,33 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardTitle right={
-            <div className="flex rounded-xl bg-bg p-1" role="group" aria-label="Habit trend period">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-display text-lg font-semibold">Habit trends</h2>
+            <div className="flex w-full rounded-xl bg-bg p-1 sm:w-auto" role="group" aria-label="Habit trend range">
               <Button
-                variant={trendPeriod === 'week' ? 'primary' : 'ghost'}
-                className="!min-h-9 !px-3"
-                aria-pressed={trendPeriod === 'week'}
-                onClick={() => setTrendPeriod('week')}
+                variant={trendPeriod === '7' ? 'primary' : 'ghost'}
+                className="!min-h-9 flex-1 !px-2 sm:flex-none sm:!px-3"
+                aria-pressed={trendPeriod === '7'}
+                onClick={() => setTrendPeriod('7')}
               >
-                Week
+                Last 7 days
               </Button>
               <Button
-                variant={trendPeriod === 'month' ? 'primary' : 'ghost'}
-                className="!min-h-9 !px-3"
-                aria-pressed={trendPeriod === 'month'}
-                onClick={() => setTrendPeriod('month')}
+                variant={trendPeriod === '30' ? 'primary' : 'ghost'}
+                className="!min-h-9 flex-1 !px-2 sm:flex-none sm:!px-3"
+                aria-pressed={trendPeriod === '30'}
+                onClick={() => setTrendPeriod('30')}
               >
-                Month
+                Last 30 days
               </Button>
             </div>
-          }>
-            Habit trends
-          </CardTitle>
+          </div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <Button
               variant="ghost"
               className="!h-9 !min-h-9 !w-9 !px-0"
-              aria-label={`Previous ${trendPeriod}`}
-              onClick={() => setTrendDate((date) => trendPeriod === 'week' ? addDays(date, -7) : addMonths(date, -1))}
+              aria-label={`Previous ${periodLength} days`}
+              onClick={() => setTrendDate((date) => addDays(date, -periodLength))}
             >
               <ChevronLeft size={18} />
             </Button>
@@ -250,29 +247,24 @@ export default function Dashboard() {
             <Button
               variant="ghost"
               className="!h-9 !min-h-9 !w-9 !px-0"
-              aria-label={`Next ${trendPeriod}`}
-              disabled={periodStart >= currentPeriodStart}
-              onClick={() => setTrendDate((date) => trendPeriod === 'week' ? addDays(date, 7) : addMonths(date, 1))}
+              aria-label={`Next ${periodLength} days`}
+              disabled={nextDisabled}
+              onClick={() => setTrendDate((date) => addDays(date, periodLength))}
             >
               <ChevronRight size={18} />
             </Button>
           </div>
           <dl className="divide-y divide-line text-sm">
             {[
-              ['Average calories', trends.calories == null ? '–' : `${fmt(trends.calories)} kcal`, `${trends.foodDays} days logged`],
-              ['Average protein', trends.protein == null ? '–' : `${fmt(trends.protein)} g`, `${trends.foodDays} days logged`],
-              ['Average steps', fmt(trends.steps), trends.steps == null ? 'no steps logged' : `${trends.stepDays} days logged`],
-              ['Average water', trends.water == null ? '–' : `${fmt(trends.water, 2)} L`, `${trends.waterDays} days logged`],
-              ['Gym sessions', `${trends.gym} completed`, ''],
-              [
-                'Weight change',
-                trends.weightChange == null ? '–' : `${fmtSigned(trends.weightChange)} kg`,
-                trends.weightChange == null ? 'needs weigh-ins in both periods' : `vs previous ${trendPeriod} average`,
-              ],
-              ['Checklist completion', trends.checklist == null ? '–' : `${fmt(trends.checklist)}%`, `${trends.checkDays} days tracked`],
-            ].map(([k, v, note]) => (
-              <div key={k} className="flex items-baseline justify-between gap-3 py-2.5">
-                <dt className="text-muted">{k}</dt>
+            ['calories', <><span className="sm:hidden">Avg. cal</span><span className="hidden sm:inline">Average calories</span></>, trends.calories == null ? '–' : `${fmt(trends.calories)} kcal`, `${trends.foodDays} days logged`],
+            ['protein', <><span className="sm:hidden">Avg. protein</span><span className="hidden sm:inline">Average protein</span></>, trends.protein == null ? '–' : `${fmt(trends.protein)} g`, `${trends.foodDays} days logged`],
+            ['steps', <><span className="sm:hidden">Avg. steps</span><span className="hidden sm:inline">Average steps</span></>, fmt(trends.steps), trends.steps == null ? 'no steps logged' : `${trends.stepDays} days logged`],
+            ['water', <><span className="sm:hidden">Avg. water</span><span className="hidden sm:inline">Average water</span></>, trends.water == null ? '–' : `${fmt(trends.water, 2)} L`, `${trends.waterDays} days logged`],
+            ['gym', <><span className="sm:hidden">Gym</span><span className="hidden sm:inline">Gym sessions</span></>, `${trends.gym} completed`, ''],
+            ['checklist', <><span className="sm:hidden">Checklist</span><span className="hidden sm:inline">Checklist completion</span></>, trends.checklist == null ? '–' : `${fmt(trends.checklist)}%`, `${trends.checkDays} days tracked`],
+          ].map(([id, label, v, note]) => (
+            <div key={String(id)} className="flex items-baseline justify-between gap-3 py-2.5">
+              <dt className="text-muted">{label}</dt>
                 <dd className="text-right">
                   <span className="font-semibold tabular-nums">{v}</span>
                   {note && <span className="block text-xs text-muted">{note}</span>}
@@ -282,11 +274,6 @@ export default function Dashboard() {
           </dl>
         </Card>
       </div>
-
-      <Card>
-        <CardTitle>Weight trend</CardTitle>
-        <WeightChart weights={data.weights} profile={profile} />
-      </Card>
     </div>
   );
 }

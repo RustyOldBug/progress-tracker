@@ -56,6 +56,7 @@ Storage is versioned (`schemaVersion` in `src/lib/schema.ts`). When the data sha
 - Progress = (starting − current) ÷ (starting − target) × 100, kept between 0 and 100.
 - Weekly weight change compares this week's average weight with last week's (weeks run Monday to Sunday).
 - Gym exercise trends use completed workouts and show best logged weight, total reps, or volume (weight × reps).
+- Nutrition patterns chart daily calorie and protein totals against their targets; averages include only days with food entries.
 - Averages use only days that have data. A day with no food logged is never counted as 0 kcal.
 - Daily checklist completion = ticked items ÷ 8.
 
