@@ -1,5 +1,5 @@
-import type { AppData, DailyRecord, FoodEntry, SetLog, WeightEntry, WorkoutRecord } from '../types';
-import { CHECKLIST_ITEMS } from '../constants';
+import type { AppData, ChecklistAutoMetric, ChecklistItem, DailyRecord, FoodEntry, SetLog, WeightEntry, WorkoutRecord } from '../types';
+import { MAX_DAILY_STEPS } from '../constants';
 import { addDays, daysBetween, startOfWeek, todayISO } from './dates';
 import { clamp } from './format';
 
@@ -25,8 +25,20 @@ export function dayTotals(foods: FoodEntry[], date: string) {
   return { calories: sum(items.map((f) => f.calories)), protein: sum(items.map((f) => f.protein)), count: items.length };
 }
 
-export const checkedCount = (r?: DailyRecord) => (r ? CHECKLIST_ITEMS.filter((i) => r.checklist[i.key]).length : 0);
-export const completionPct = (r?: DailyRecord) => (checkedCount(r) / CHECKLIST_ITEMS.length) * 100;
+export type ChecklistAutoValues = Partial<Record<ChecklistAutoMetric, boolean>>;
+
+export function checklistStates(items: ChecklistItem[], record?: DailyRecord, automatic: ChecklistAutoValues = {}) {
+  return items.map((item) => ({
+    item,
+    checked: item.autoComplete ? automatic[item.autoComplete] ?? false : Boolean(record?.checklist[item.id]),
+  }));
+}
+
+export function checklistProgress(items: ChecklistItem[], record?: DailyRecord, automatic: ChecklistAutoValues = {}) {
+  const states = checklistStates(items, record, automatic);
+  const checked = states.filter((state) => state.checked).length;
+  return { checked, total: states.length, percent: states.length ? (checked / states.length) * 100 : 0 };
+}
 
 export const weekDates = (anyIso: string) => {
   const s = startOfWeek(anyIso);
@@ -94,6 +106,7 @@ export function periodOverview(data: AppData, start: string, end: string, previo
   const steps: number[] = [];
   const waters: number[] = [];
   const checks: number[] = [];
+  const stepOutliers: { date: string; steps: number }[] = [];
 
   for (const date of dates) {
     const totals = dayTotals(data.foods, date);
@@ -102,10 +115,35 @@ export function periodOverview(data: AppData, start: string, end: string, previo
       proteins.push(totals.protein);
     }
     const daily = data.daily[date];
+    const hasWeight = data.weights.some((weight) => weight.date === date);
+    const hasWorkout = data.workouts.some((workout) => workout.date === date);
+    const hasCompletedWorkout = data.workouts.some((workout) => workout.date === date && workout.status === 'completed');
     if (daily) {
-      if (daily.steps != null) steps.push(daily.steps);
+      if (daily.steps != null) {
+        if (daily.steps < 0 || daily.steps > MAX_DAILY_STEPS) stepOutliers.push({ date, steps: daily.steps });
+        else steps.push(daily.steps);
+      }
       if (daily.water > 0) waters.push(daily.water / 1000);
-      checks.push(completionPct(daily));
+    }
+    if (daily || totals.count) {
+      checks.push(checklistProgress(data.checklistItems, daily, {
+        calories: totals.count > 0 && totals.calories <= data.profile.calorieTarget,
+        protein: totals.protein >= data.profile.proteinTarget,
+        steps: (daily?.steps ?? 0) >= data.profile.stepsTarget && (daily?.steps ?? 0) <= MAX_DAILY_STEPS,
+        water: (daily?.water ?? 0) >= data.profile.waterTargetMl,
+        weighIn: hasWeight,
+        gym: hasCompletedWorkout,
+      }).percent);
+    }
+    if (!daily && !totals.count && (hasWeight || hasWorkout)) {
+      checks.push(checklistProgress(data.checklistItems, daily, {
+        calories: false,
+        protein: false,
+        steps: false,
+        water: false,
+        weighIn: hasWeight,
+        gym: hasCompletedWorkout,
+      }).percent);
     }
   }
 
@@ -124,6 +162,7 @@ export function periodOverview(data: AppData, start: string, end: string, previo
     checklist: avg(checks),
     foodDays: cals.length,
     stepDays: steps.length,
+    stepOutliers,
     waterDays: waters.length,
     checkDays: checks.length,
   };

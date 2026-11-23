@@ -4,15 +4,14 @@ export type DayPlan = SessionType | 'rest';
 export type MealType = 'Breakfast' | 'Lunch' | 'Snacks' | 'Dinner';
 export type WorkoutStatus = 'planned' | 'completed' | 'skipped' | 'rescheduled';
 
-export type ChecklistKey =
-  | 'calories'
-  | 'protein'
-  | 'steps'
-  | 'gym'
-  | 'water'
-  | 'produce'
-  | 'sleep'
-  | 'weighIn';
+export type ChecklistKey = string;
+export type ChecklistAutoMetric = 'calories' | 'protein' | 'steps' | 'water' | 'weighIn' | 'gym';
+
+export interface ChecklistItem {
+  id: ChecklistKey;
+  label: string;
+  autoComplete?: ChecklistAutoMetric;
+}
 
 export interface UserProfile {
   name: string;
@@ -92,6 +91,7 @@ export interface WorkoutRecord {
 export interface AppData {
   schemaVersion: number;
   profile: UserProfile;
+  checklistItems: ChecklistItem[];
   weights: WeightEntry[];
   foods: FoodEntry[];
   daily: Record<string, DailyRecord>;

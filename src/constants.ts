@@ -1,17 +1,19 @@
-import type { ChecklistKey, DayPlan, MealType, SessionType, UserProfile, WorkoutRoutine, WorkoutType } from './types';
+import type { ChecklistItem, DayPlan, MealType, SessionType, UserProfile, WorkoutRoutine, WorkoutType } from './types';
 import { todayISO } from './lib/dates';
 
 export const MEALS: MealType[] = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
 
-export const CHECKLIST_ITEMS: { key: ChecklistKey; label: string }[] = [
-  { key: 'calories', label: 'Stayed within calorie target' },
-  { key: 'protein', label: 'Reached protein target' },
-  { key: 'steps', label: 'Completed daily steps' },
-  { key: 'gym', label: 'Completed scheduled gym session' },
-  { key: 'water', label: 'Drank enough water' },
-  { key: 'produce', label: 'Ate fruits and vegetables' },
-  { key: 'sleep', label: 'Slept 7–9 hours' },
-  { key: 'weighIn', label: 'Recorded morning body weight' },
+export const MAX_DAILY_STEPS = 100_000;
+
+export const DEFAULT_CHECKLIST_ITEMS: ChecklistItem[] = [
+  { id: 'calories', label: 'Stayed within calorie target', autoComplete: 'calories' },
+  { id: 'protein', label: 'Reached protein target', autoComplete: 'protein' },
+  { id: 'steps', label: 'Completed daily steps', autoComplete: 'steps' },
+  { id: 'gym', label: 'Completed scheduled gym session', autoComplete: 'gym' },
+  { id: 'water', label: 'Drank enough water', autoComplete: 'water' },
+  { id: 'produce', label: 'Ate fruits and vegetables' },
+  { id: 'sleep', label: 'Slept 7–9 hours' },
+  { id: 'weighIn', label: 'Recorded morning body weight', autoComplete: 'weighIn' },
 ];
 
 export const DEFAULT_ROUTINES: WorkoutRoutine[] = [

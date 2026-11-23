@@ -70,6 +70,16 @@ export function useThemeMode(): ThemeMode {
   );
 }
 
+export function useThemeDark(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => document.documentElement.classList.contains('dark')
+  );
+}
+
 export function useThemePalette(): ThemePalette {
   return useSyncExternalStore(
     (cb) => {

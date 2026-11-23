@@ -1,7 +1,7 @@
 import type { AppData } from '../types';
 import { isFutureISO, isValidISO, todayISO } from './dates';
 import { isObj, migrate, SCHEMA_VERSION } from './schema';
-import { DEFAULT_ROUTINES, MEALS } from '../constants';
+import { DEFAULT_ROUTINES, MAX_DAILY_STEPS, MEALS } from '../constants';
 
 export const APP_ID = 'weight-loss-tracker';
 
@@ -19,6 +19,7 @@ export function buildBackup(data: AppData): BackupFile {
     createdAt: new Date().toISOString(),
     data: {
       profile: data.profile,
+      checklistItems: data.checklistItems,
       weights: data.weights,
       foods: data.foods,
       daily: data.daily,
@@ -51,6 +52,18 @@ function validateData(d: Record<string, unknown>): string | null {
   for (const k of ['age', 'heightCm', 'startingWeight', 'targetWeight', 'calorieTarget', 'proteinTarget', 'stepsTarget', 'waterTargetMl']) {
     if (!finite(d.profile[k])) return `Profile field "${k}" is missing or not a number.`;
   }
+  if (d.checklistItems != null) {
+    if (!Array.isArray(d.checklistItems)) return 'The backup checklist items are invalid.';
+    const checklistIds = new Set<string>();
+    for (const [i, item] of d.checklistItems.entries()) {
+      if (!isObj(item) || typeof item.id !== 'string' || !item.id.trim() || typeof item.label !== 'string' || !item.label.trim())
+        return `Checklist item ${i + 1} is invalid.`;
+      if (checklistIds.has(item.id)) return `Checklist item "${item.id}" is duplicated.`;
+      checklistIds.add(item.id);
+      if (item.autoComplete != null && !['calories', 'protein', 'steps', 'water', 'weighIn', 'gym'].includes(item.autoComplete as string))
+        return `Checklist item ${i + 1} has an invalid automatic rule.`;
+    }
+  }
   if (!Array.isArray(d.weights)) return 'The backup has no weight history list.';
   const weightDates = new Set<string>();
   for (const [i, w] of d.weights.entries()) {
@@ -80,7 +93,8 @@ function validateData(d: Record<string, unknown>): string | null {
   for (const [date, r] of Object.entries(d.daily)) {
     if (!isValidISO(date) || !isObj(r) || !isObj(r.checklist)) return `Daily record "${date}" is invalid.`;
     if (isFutureISO(date)) return `Daily record "${date}" is dated in the future.`;
-    if (r.steps != null && !finite(r.steps)) return `Daily record "${date}" has invalid steps.`;
+    if (r.steps != null && (!finite(r.steps) || r.steps < 0 || r.steps > MAX_DAILY_STEPS * 2))
+      return `Daily record "${date}" has invalid steps.`;
     if (r.water != null && !finite(r.water)) return `Daily record "${date}" has invalid water.`;
   }
   const routines = d.routines ?? DEFAULT_ROUTINES;
@@ -213,5 +227,11 @@ export function mergeData(cur: AppData, inc: AppData): { merged: AppData; report
     }
   }
 
-  return { merged: { ...cur, weights, foods, daily, workouts, routines }, report };
+  const checklistIds = new Set(cur.checklistItems.map((item) => item.id));
+  const checklistItems = [
+    ...cur.checklistItems,
+    ...inc.checklistItems.filter((item) => !checklistIds.has(item.id)),
+  ];
+
+  return { merged: { ...cur, weights, foods, daily, workouts, routines, checklistItems }, report };
 }

@@ -3,10 +3,11 @@ import type { ReactNode } from 'react';
 import { Beef, CalendarCheck, ChevronLeft, ChevronRight, Droplets, Dumbbell, Flame, Footprints } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, ProgressBar } from '../components/ui';
-import { checkedCount, completionPct, dayTotals, firstWeight, latestWeight, periodOverview, progressPct } from '../lib/calc';
+import { checklistProgress, dayTotals, firstWeight, latestWeight, periodOverview, progressPct } from '../lib/calc';
 import { addDays, daysBetween, formatLong, formatShort, parseISO, todayISO, weekdayOf } from '../lib/dates';
 import { fmt, fmtKg } from '../lib/format';
-import { CHECKLIST_ITEMS, PLAN_LABELS, routineLabel } from '../constants';
+import { MAX_DAILY_STEPS, PLAN_LABELS, routineLabel } from '../constants';
+import { navigate } from '../lib/router';
 
 function Journey({ start, target, current }: { start: number; target: number; current: number | null }) {
   const span = start - target;
@@ -85,7 +86,7 @@ function Meter({
 }
 
 export default function Dashboard() {
-  const { data, addWater } = useStore();
+  const { data, addWater, setSelectedDate } = useStore();
   const [trendPeriod, setTrendPeriod] = useState<'7' | '30'>('7');
   const [trendDate, setTrendDate] = useState(todayISO());
   const { profile } = data;
@@ -100,6 +101,14 @@ export default function Dashboard() {
 
   const totals = dayTotals(data.foods, today);
   const daily = data.daily[today];
+  const todayChecklist = checklistProgress(data.checklistItems, daily, {
+    calories: totals.count > 0 && totals.calories <= profile.calorieTarget,
+    protein: totals.protein >= profile.proteinTarget,
+    steps: (daily?.steps ?? 0) >= profile.stepsTarget && (daily?.steps ?? 0) <= MAX_DAILY_STEPS,
+    water: (daily?.water ?? 0) >= profile.waterTargetMl,
+    weighIn: data.weights.some((weight) => weight.date === today),
+    gym: data.workouts.some((entry) => entry.date === today && entry.status === 'completed'),
+  });
   const workout = data.workouts.find((w) => w.date === today);
   const plan = profile.schedule[weekdayOf(today)];
   const gymStatus = workout
@@ -210,10 +219,10 @@ export default function Dashboard() {
                   Checklist
                 </span>
                 <span className="tabular-nums text-muted">
-                  {checkedCount(daily)} / {CHECKLIST_ITEMS.length} · {fmt(completionPct(daily))}%
+                  {todayChecklist.checked} / {todayChecklist.total} · {fmt(todayChecklist.percent)}%
                 </span>
               </div>
-              <ProgressBar value={completionPct(daily)} max={100} />
+              <ProgressBar value={todayChecklist.percent} max={100} />
             </div>
           </div>
         </Card>
@@ -263,7 +272,7 @@ export default function Dashboard() {
           <dl className="divide-y divide-line text-sm">
             {[
             ['calories', <><span className="sm:hidden">Avg. cal</span><span className="hidden sm:inline">Average calories</span></>, trends.calories == null ? '–' : `${fmt(trends.calories)} kcal`, `${trends.foodDays} days logged`],
-            ['protein', <><span className="sm:hidden">Avg. protein</span><span className="hidden sm:inline">Average protein</span></>, trends.protein == null ? '–' : `${fmt(trends.protein, 1)} g`, `${trends.foodDays} days logged`],
+            ['protein', <><span className="sm:hidden">Avg. protein</span><span className="hidden sm:inline">Average protein / logged day</span></>, trends.protein == null ? '–' : `${fmt(trends.protein, 1)} g`, `${trends.foodDays} days logged`],
             ['steps', <><span className="sm:hidden">Avg. steps</span><span className="hidden sm:inline">Average steps</span></>, fmt(trends.steps), trends.steps == null ? 'no steps logged' : `${trends.stepDays} days logged`],
             ['water', <><span className="sm:hidden">Avg. water</span><span className="hidden sm:inline">Average water</span></>, trends.water == null ? '–' : `${fmt(trends.water, 2)} L`, `${trends.waterDays} days logged`],
             ['gym', <><span className="sm:hidden">Gym</span><span className="hidden sm:inline">Gym sessions</span></>, `${trends.gym} completed`, ''],
@@ -278,6 +287,30 @@ export default function Dashboard() {
               </div>
             ))}
           </dl>
+          <p className="mt-2 text-xs text-muted">
+            Averages use days with that metric logged. Step entries over {fmt(MAX_DAILY_STEPS)} are excluded and flagged for review.
+          </p>
+          {trends.stepOutliers.length > 0 && (
+            <div className="mt-3 rounded-xl border border-warn/40 bg-warn-soft p-3 text-sm">
+              <p className="font-medium">Step entries outside the 0–{fmt(MAX_DAILY_STEPS)} range are excluded from the average.</p>
+              <ul className="mt-1 space-y-1">
+                {trends.stepOutliers.map(({ date, steps }) => (
+                  <li key={date}>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-8 !px-1 text-left"
+                      onClick={() => {
+                        setSelectedDate(date);
+                        navigate('/daily');
+                      }}
+                    >
+                      Review {formatShort(date)} · {fmt(steps)} steps
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
       </div>
     </div>

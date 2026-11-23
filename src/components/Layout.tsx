@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cx, Message } from './ui';
 import { useStore } from '../store';
-import { setMode, useThemeMode } from '../lib/theme';
+import { setMode, useThemeDark, useThemeMode } from '../lib/theme';
 
 export const NAV: { path: string; label: string; icon: LucideIcon; primary: boolean }[] = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, primary: true },
@@ -31,7 +31,7 @@ export const NAV: { path: string; label: string; icon: LucideIcon; primary: bool
 
 function ThemeToggle({ className }: { className?: string }) {
   const mode = useThemeMode();
-  const dark = document.documentElement.classList.contains('dark');
+  const dark = useThemeDark();
   return (
     <button
       type="button"

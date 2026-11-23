@@ -1,6 +1,7 @@
 import type {
   AppData,
   ChecklistKey,
+  ChecklistItem,
   DailyRecord,
   ExerciseLog,
   FoodEntry,
@@ -9,10 +10,10 @@ import type {
   WorkoutRoutine,
   WorkoutRecord,
 } from '../types';
-import { CHECKLIST_ITEMS, DEFAULT_ROUTINES, defaultProfile, MEALS, SESSION_LABELS } from '../constants';
+import { DEFAULT_CHECKLIST_ITEMS, DEFAULT_ROUTINES, defaultProfile, MEALS, SESSION_LABELS } from '../constants';
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -26,15 +27,15 @@ export function uid(): string {
   return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function emptyChecklist(): Record<ChecklistKey, boolean> {
+export function emptyChecklist(items: ChecklistItem[] = DEFAULT_CHECKLIST_ITEMS): Record<ChecklistKey, boolean> {
   const c = {} as Record<ChecklistKey, boolean>;
-  CHECKLIST_ITEMS.forEach((i) => (c[i.key] = false));
+  items.forEach((i) => (c[i.id] = false));
   return c;
 }
 
-export const emptyDaily = (date: string): DailyRecord => ({
+export const emptyDaily = (date: string, items?: ChecklistItem[]): DailyRecord => ({
   date,
-  checklist: emptyChecklist(),
+  checklist: emptyChecklist(items),
   steps: null,
   water: 0,
   notes: '',
@@ -44,6 +45,7 @@ export function defaultData(): AppData {
   return {
     schemaVersion: SCHEMA_VERSION,
     profile: defaultProfile(),
+    checklistItems: DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item })),
     weights: [],
     foods: [],
     daily: {},
@@ -78,6 +80,34 @@ export function migrate(raw: unknown): AppData {
   if (!isObj(raw)) return base;
   // const version = num(raw.schemaVersion, 0);  // v0 → v1 needs no changes. Add steps here later.
 
+  const requiredChecklistItems = DEFAULT_CHECKLIST_ITEMS.filter((item) => item.autoComplete);
+  const requiredIds = new Set(requiredChecklistItems.map((item) => item.id));
+  const checklistItems = Array.isArray(raw.checklistItems)
+    ? (() => {
+        const loadedItems = raw.checklistItems
+          .filter(isObj)
+          .filter((item) =>
+            typeof item.id === 'string' &&
+            item.id.trim() &&
+            typeof item.label === 'string' &&
+            item.label.trim() &&
+            !requiredIds.has(item.id)
+          )
+          .map((item) => {
+            const requiredItem = requiredChecklistItems.find((required) => required.id === item.id);
+            return requiredItem ? { ...requiredItem } : {
+              id: (item.id as string).trim(),
+              label: (item.label as string).trim(),
+            };
+          })
+          .filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
+        return [
+          ...loadedItems,
+          ...requiredChecklistItems.filter((required) => !loadedItems.some((item) => item.id === required.id)),
+        ];
+      })()
+    : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item }));
+
   const routines: WorkoutRoutine[] = Array.isArray(raw.routines)
     ? raw.routines
         .filter(isObj)
@@ -108,7 +138,7 @@ export function migrate(raw: unknown): AppData {
       if (!isObj(v)) continue;
       daily[date] = {
         date,
-        checklist: { ...emptyChecklist(), ...(isObj(v.checklist) ? v.checklist : {}) } as Record<ChecklistKey, boolean>,
+        checklist: { ...emptyChecklist(checklistItems), ...(isObj(v.checklist) ? v.checklist : {}) } as Record<ChecklistKey, boolean>,
         steps: num(v.steps),
         water: num(v.water, 0) as number,
         notes: str(v.notes),
@@ -160,6 +190,7 @@ export function migrate(raw: unknown): AppData {
   return {
     schemaVersion: SCHEMA_VERSION,
     profile,
+    checklistItems,
     weights,
     foods,
     daily,

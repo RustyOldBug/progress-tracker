@@ -4,16 +4,17 @@ import { useStore } from '../store';
 import { Button, Card, CardTitle, Field, Input, Message, PageHeader, Select, useConfirm } from '../components/ui';
 import { isValidISO, todayISO, WEEKDAY_NAMES } from '../lib/dates';
 import { setMode, setPalette, useThemeMode, useThemePalette, type ThemeMode, type ThemePalette } from '../lib/theme';
-import { DEFAULT_ROUTINES, defaultProfile } from '../constants';
+import { DEFAULT_CHECKLIST_ITEMS, DEFAULT_ROUTINES, defaultProfile } from '../constants';
 import { uid } from '../lib/schema';
-import type { DayPlan, UserProfile, WorkoutRoutine } from '../types';
+import type { ChecklistItem, DayPlan, UserProfile, WorkoutRoutine } from '../types';
 
 type Draft = Record<Exclude<keyof UserProfile, 'schedule'>, string> & {
   schedule: DayPlan[];
   routines: WorkoutRoutine[];
+  checklistItems: ChecklistItem[];
 };
 
-const toDraft = (p: UserProfile, routines: WorkoutRoutine[]): Draft => ({
+const toDraft = (p: UserProfile, routines: WorkoutRoutine[], checklistItems: ChecklistItem[]): Draft => ({
   name: p.name,
   age: String(p.age),
   gender: p.gender,
@@ -30,6 +31,7 @@ const toDraft = (p: UserProfile, routines: WorkoutRoutine[]): Draft => ({
   startDate: p.startDate,
   schedule: [...p.schedule],
   routines: routines.map((routine) => ({ ...routine, exercises: [...routine.exercises] })),
+  checklistItems: checklistItems.map((item) => ({ ...item })),
 });
 
 const RANGES: [keyof Draft, string, number, number][] = [
@@ -47,13 +49,15 @@ const RANGES: [keyof Draft, string, number, number][] = [
 ];
 
 export default function SettingsPage() {
-  const { data, setProfile, setRoutines, resetProfile } = useStore();
+  const { data, setProfile, setRoutines, setChecklistItems, resetProfile } = useStore();
   const confirm = useConfirm();
   const theme = useThemeMode();
   const palette = useThemePalette();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(data.profile, data.routines));
+  const [draft, setDraft] = useState<Draft>(() => toDraft(data.profile, data.routines, data.checklistItems));
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const automaticChecklistItems = draft.checklistItems.filter((item) => item.autoComplete);
+  const manualChecklistItems = draft.checklistItems.filter((item) => !item.autoComplete);
 
   const set = (k: keyof Draft, v: string) => {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -76,6 +80,14 @@ export default function SettingsPage() {
     const routineNames = draft.routines.map((routine) => routine.name.trim().toLocaleLowerCase());
     if (draft.routines.some((routine) => !routine.name.trim())) errs.push('Every workout routine needs a name.');
     if (new Set(routineNames).size !== routineNames.length) errs.push('Workout routine names must be unique.');
+    const checklistIds = draft.checklistItems.map((item) => item.id);
+    const checklistLabels = draft.checklistItems.map((item) => item.label.trim().toLocaleLowerCase());
+    if (draft.checklistItems.some((item) => !item.label.trim())) errs.push('Every checklist item needs a name.');
+    if (new Set(checklistIds).size !== checklistIds.length) errs.push('Checklist item IDs must be unique.');
+    if (new Set(checklistLabels).size !== checklistLabels.length) errs.push('Checklist item names must be unique.');
+    if (DEFAULT_CHECKLIST_ITEMS.some((item) => item.autoComplete && !draft.checklistItems.some((draftItem) =>
+      draftItem.id === item.id && draftItem.autoComplete === item.autoComplete
+    ))) errs.push('The automatic Calories, Protein, Steps, Water, Weigh-in and Gym checklist items cannot be removed.');
     setErrors(errs);
     if (errs.length) return setSaved(false);
     const routines = draft.routines.map((routine) => ({
@@ -101,6 +113,7 @@ export default function SettingsPage() {
       tdee: nums.tdee,
     });
     setRoutines(routines);
+    setChecklistItems(draft.checklistItems.map((item) => ({ ...item, label: item.label.trim() })));
     setSaved(true);
   };
 
@@ -108,7 +121,8 @@ export default function SettingsPage() {
     if (await confirm({ title: 'Reset settings to defaults?', message: 'Targets, profile values and the weekly gym schedule go back to the original values. Your logged data is not affected.', confirmLabel: 'Reset settings', danger: true })) {
       resetProfile();
       setRoutines(DEFAULT_ROUTINES.map((routine) => ({ ...routine, exercises: [...routine.exercises] })));
-      setDraft(toDraft({ ...defaultProfile(), startDate: data.profile.startDate }, DEFAULT_ROUTINES));
+      setChecklistItems(DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item })));
+      setDraft(toDraft({ ...defaultProfile(), startDate: data.profile.startDate }, DEFAULT_ROUTINES, DEFAULT_CHECKLIST_ITEMS));
       setErrors([]);
       setSaved(true);
     }
@@ -162,6 +176,97 @@ export default function SettingsPage() {
             </Field>
           ))}
         </div>
+      </Card>
+
+      <Card>
+        <CardTitle right={
+          <Button
+            onClick={() => {
+              setDraft((current) => ({
+                ...current,
+                checklistItems: [...current.checklistItems, { id: `custom-${uid()}`, label: '' }],
+              }));
+              setSaved(false);
+            }}
+          >
+            <Plus size={16} /> Add item
+          </Button>
+        }>Daily checklist</CardTitle>
+        <p className="mb-4 text-sm text-muted">
+          Automatic items are required and cannot be removed. Add, rename or remove your manual checklist items.
+        </p>
+        {automaticChecklistItems.length > 0 && (
+          <section aria-labelledby="settings-automatic-checklist-heading">
+            <h3 id="settings-automatic-checklist-heading" className="mb-1 font-semibold">Automatic</h3>
+            <p className="mb-3 text-xs text-muted">Checked from your daily logs and targets; these are managed by the app.</p>
+            <div className="space-y-2">
+              {automaticChecklistItems.map((item) => (
+                <div key={item.id} className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Field
+                      label={`${item.label} · required`}
+                      hint={item.autoComplete === 'steps'
+                        ? 'Checks when logged steps reach your daily target.'
+                        : item.autoComplete === 'protein'
+                          ? 'Checks when logged protein reaches your daily target.'
+                          : item.autoComplete === 'calories'
+                            ? 'Checks when food is logged and total calories are within your daily target.'
+                            : item.autoComplete === 'water'
+                              ? 'Checks when logged water reaches your daily target.'
+                              : item.autoComplete === 'weighIn'
+                                ? 'Checks when a weight entry is saved for that date.'
+                                : item.autoComplete === 'gym'
+                                  ? 'Checks when a workout is marked completed for that date.'
+                                : undefined}
+                    >
+                      <Input value={item.label} disabled />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {manualChecklistItems.length > 0 && (
+          <section className={automaticChecklistItems.length > 0 ? 'mt-5 border-t border-line pt-4' : ''} aria-labelledby="settings-manual-checklist-heading">
+            <h3 id="settings-manual-checklist-heading" className="mb-3 font-semibold">Manual</h3>
+            <div className="space-y-2">
+              {manualChecklistItems.map((item) => (
+                <div key={item.id} className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Field label="Checklist item">
+                      <Input
+                        value={item.label}
+                        onChange={(event) => {
+                          const label = event.target.value;
+                          setDraft((current) => ({
+                            ...current,
+                            checklistItems: current.checklistItems.map((entry) => entry.id === item.id ? { ...entry, label } : entry),
+                          }));
+                          setSaved(false);
+                        }}
+                        placeholder="e.g. Take a walk"
+                      />
+                    </Field>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Remove checklist item ${item.label || 'unnamed item'}`}
+                    onClick={() => {
+                      setDraft((current) => ({
+                        ...current,
+                        checklistItems: current.checklistItems.filter((entry) => entry.id !== item.id),
+                      }));
+                      setSaved(false);
+                    }}
+                  >
+                    <Trash2 size={18} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </Card>
 
       <Card>

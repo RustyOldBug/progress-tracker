@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AppData, ChecklistKey, DailyRecord, FoodEntry, UserProfile, WeightEntry, WorkoutRecord, WorkoutRoutine } from './types';
+import type { AppData, ChecklistItem, ChecklistKey, DailyRecord, FoodEntry, UserProfile, WeightEntry, WorkoutRecord, WorkoutRoutine } from './types';
 import { defaultProfile } from './constants';
 import { todayISO, addDays } from './lib/dates';
 import { defaultData, emptyDaily, migrate, uid } from './lib/schema';
@@ -44,6 +44,7 @@ interface Store {
   setSelectedDate: (d: string) => void;
   setProfile: (p: UserProfile) => void;
   setRoutines: (routines: WorkoutRoutine[]) => void;
+  setChecklistItems: (items: ChecklistItem[]) => void;
   resetProfile: () => void;
   saveWeight: (e: NewWeight) => void;
   deleteWeight: (id: string) => void;
@@ -125,7 +126,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateDaily: Store['updateDaily'] = (date, fn) => {
     if (date > todayISO()) return;
-    setData((d) => ({ ...d, daily: { ...d.daily, [date]: fn(d.daily[date] ?? emptyDaily(date)) } }));
+    setData((d) => ({ ...d, daily: { ...d.daily, [date]: fn(d.daily[date] ?? emptyDaily(date, d.checklistItems)) } }));
   };
 
   const store: Store = {
@@ -135,6 +136,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSelectedDate,
     setProfile: (profile) => setData((d) => ({ ...d, profile })),
     setRoutines: (routines) => setData((d) => ({ ...d, routines })),
+    setChecklistItems: (checklistItems) => setData((d) => ({ ...d, checklistItems })),
     resetProfile: () => setData((d) => ({ ...d, profile: { ...defaultProfile(), startDate: d.profile.startDate } })),
     saveWeight: (e) =>
       setData((d) => {
@@ -149,8 +151,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       : ({ ...d, foods: d.foods.map((x) => (x.id === id ? { id, ...f } : x)) })),
     deleteFood: (id) => setData((d) => ({ ...d, foods: d.foods.filter((f) => f.id !== id) })),
     updateDaily,
-    toggleCheck: (date, key) =>
-      updateDaily(date, (r) => ({ ...r, checklist: { ...r.checklist, [key]: !r.checklist[key] } })),
+    toggleCheck: (date, key) => {
+      if (data.checklistItems.find((item) => item.id === key)?.autoComplete) return;
+      updateDaily(date, (r) => ({ ...r, checklist: { ...r.checklist, [key]: !r.checklist[key] } }));
+    },
     addWater: (date, ml) => updateDaily(date, (r) => ({ ...r, water: Math.max(0, r.water + ml) })),
     saveWorkout: (w) => setData((d) => ({ ...d, workouts: upsertById(d.workouts, w) })),
     updateWorkout: (id, update) =>

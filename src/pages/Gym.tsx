@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, ChevronDown, Plus, Trash2, Undo2 } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, DateNav, EmptyState, Field, IconButton, Input, Message, Select, Textarea, cx, useConfirm } from '../components/ui';
@@ -31,6 +31,7 @@ export default function Gym() {
   const [moveTo, setMoveTo] = useState('');
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionDetailsRef = useRef<HTMLDivElement>(null);
   const plan = profile.schedule[weekdayOf(date)];
   const futureDate = isFutureISO(date);
   const selectedType = newType || (plan === 'rest' ? data.routines[0]?.id ?? '' : plan);
@@ -258,6 +259,46 @@ export default function Gym() {
             {error && <div className="mt-3"><Message tone="error">{error}</Message></div>}
           </Card>
 
+          {record.status === 'completed' && (
+            <div ref={sessionDetailsRef} className="scroll-mt-4">
+              <Card>
+                <CardTitle>Completed session details</CardTitle>
+                {record.exercises.length === 0 ? (
+                  <EmptyState title="No exercise details recorded" hint="This completed session has no saved exercises or sets." />
+                ) : (
+                  <ul className="space-y-3">
+                    {record.exercises.map((exercise) => (
+                      <li key={exercise.id} className="rounded-xl border border-line p-3">
+                        <h3 className="font-semibold">{exercise.name || 'Unnamed exercise'}</h3>
+                        {exercise.sets.length > 0 ? (
+                          <ul className="mt-2 space-y-1 text-sm text-muted">
+                            {exercise.sets.map((set, index) => (
+                              <li key={index}>
+                                Set {index + 1}: {set.weight ?? '–'} kg × {set.reps ?? '–'} reps
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-sm text-muted">No sets recorded.</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {(record.duration != null || record.notes.trim()) && (
+                  <dl className="mt-3 grid gap-2 border-t border-line pt-3 text-sm sm:grid-cols-2">
+                    {record.duration != null && (
+                      <div><dt className="text-muted">Duration</dt><dd>{record.duration} minutes</dd></div>
+                    )}
+                    {record.notes.trim() && (
+                      <div><dt className="text-muted">Notes</dt><dd className="whitespace-pre-wrap">{record.notes}</dd></div>
+                    )}
+                  </dl>
+                )}
+              </Card>
+            </div>
+          )}
+
           {record.status === 'planned' && record.started !== false && !futureDate && <>
           <Card>
             <CardTitle>Exercises</CardTitle>
@@ -353,7 +394,18 @@ export default function Gym() {
               <ul className="divide-y divide-line">
                 {history.map((w) => (
                   <li key={w.id}>
-                    <button type="button" onClick={() => { setSelectedDate(w.date); setNewType(''); }} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(w.date);
+                        setNewType('');
+                        requestAnimationFrame(() => {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          sessionDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        });
+                      }}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left hover:bg-bg"
+                    >
                       <span>
                         <span className="block font-medium">{routineLabel(w.workoutType, data.routines, w.routineName)}</span>
                         <span className="block text-sm text-muted">{formatMedium(w.date)}{w.duration ? ` · ${w.duration} min` : ''}</span>

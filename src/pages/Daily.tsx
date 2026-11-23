@@ -2,30 +2,47 @@ import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { useStore } from '../store';
 import { Button, Card, CardTitle, DateNav, Input, ProgressBar, Textarea, cx, useConfirm } from '../components/ui';
-import { checkedCount, completionPct, dayTotals } from '../lib/calc';
+import { checklistProgress, checklistStates, dayTotals } from '../lib/calc';
 import { formatLong, isFutureISO, todayISO } from '../lib/dates';
 import { emptyDaily } from '../lib/schema';
 import { fmt } from '../lib/format';
-import { CHECKLIST_ITEMS } from '../constants';
-import type { ChecklistKey } from '../types';
+import { MAX_DAILY_STEPS } from '../constants';
+import type { ChecklistItem } from '../types';
 
 export default function Daily() {
   const { data, selectedDate: date, setSelectedDate, toggleCheck, updateDaily, addWater } = useStore();
   const confirm = useConfirm();
   const { profile } = data;
   const futureDate = isFutureISO(date);
-  const rec = data.daily[date] ?? emptyDaily(date);
+  const rec = data.daily[date] ?? emptyDaily(date, data.checklistItems);
   const totals = dayTotals(data.foods, date);
   const hasWeight = data.weights.some((w) => w.date === date);
   const workout = data.workouts.find((w) => w.date === date);
   const [custom, setCustom] = useState('');
-  const pct = completionPct(rec);
+  const checklist = checklistProgress(data.checklistItems, rec, {
+    calories: totals.count > 0 && totals.calories <= profile.calorieTarget,
+    protein: totals.protein >= profile.proteinTarget,
+    steps: (rec.steps ?? 0) >= profile.stepsTarget && (rec.steps ?? 0) <= MAX_DAILY_STEPS,
+    water: rec.water >= profile.waterTargetMl,
+    weighIn: hasWeight,
+    gym: workout?.status === 'completed',
+  });
+  const states = checklistStates(data.checklistItems, rec, {
+    calories: totals.count > 0 && totals.calories <= profile.calorieTarget,
+    protein: totals.protein >= profile.proteinTarget,
+    steps: (rec.steps ?? 0) >= profile.stepsTarget && (rec.steps ?? 0) <= MAX_DAILY_STEPS,
+    water: rec.water >= profile.waterTargetMl,
+    weighIn: hasWeight,
+    gym: workout?.status === 'completed',
+  });
+  const automaticStates = states.filter(({ item }) => Boolean(item.autoComplete));
+  const manualStates = states.filter(({ item }) => !item.autoComplete);
 
-  const hints: Partial<Record<ChecklistKey, string>> = {
+  const hints: Record<string, string> = {
     calories: totals.count ? `${fmt(totals.calories)} / ${fmt(profile.calorieTarget)} kcal logged` : 'No food logged yet',
     protein: `${fmt(totals.protein, 1)} / ${fmt(profile.proteinTarget)} g logged`,
     steps: `${fmt(rec.steps ?? 0)} / ${fmt(profile.stepsTarget)} steps`,
-    gym: workout ? `Session status: ${workout.status}` : 'No session recorded',
+    gym: workout?.status === 'completed' ? 'Workout completed' : 'No completed session for this date',
     water: `${fmt(rec.water / 1000, 2)} / ${fmt(profile.waterTargetMl / 1000, 1)} L`,
     weighIn: hasWeight ? 'Weight logged' : 'No weigh-in for this date',
   };
@@ -50,44 +67,41 @@ export default function Daily() {
       {futureDate && <p className="rounded-xl border border-warn/40 bg-warn-soft px-4 py-3 text-sm">Future dates are view-only. Daily logs can be entered on or before today.</p>}
 
       <Card>
-        <CardTitle right={<span className="text-sm tabular-nums text-muted">{checkedCount(rec)} / {CHECKLIST_ITEMS.length} · {fmt(pct)}%</span>}>
+        <CardTitle right={<span className="text-sm tabular-nums text-muted">{checklist.checked} / {checklist.total} · {fmt(checklist.percent)}%</span>}>
           Checklist
         </CardTitle>
-        <ProgressBar value={pct} max={100} />
-        <ul className="mt-4 space-y-2">
-          {CHECKLIST_ITEMS.map(({ key, label }) => {
-            const on = rec.checklist[key];
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={on}
-                  aria-disabled={futureDate}
-                  disabled={futureDate}
-                  onClick={() => toggleCheck(date, key)}
-                  className={cx(
-                    'flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 text-left transition',
-                    on ? 'border-accent/50 bg-accent-soft' : 'border-line hover:bg-bg'
-                  )}
-                >
-                  <span
-                    className={cx(
-                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2',
-                      on ? 'border-accent bg-accent text-on-accent' : 'border-muted/50'
-                    )}
-                  >
-                    {on && <Check size={18} strokeWidth={3} />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block font-medium">{label}</span>
-                    {hints[key] && <span className="block text-xs text-muted">{hints[key]}</span>}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <ProgressBar value={checklist.percent} max={100} />
+        {automaticStates.length > 0 && (
+          <section className="mt-4" aria-labelledby="automatic-checklist-heading">
+            <h3 id="automatic-checklist-heading" className="font-semibold">Automatic</h3>
+            <p className="mb-2 text-xs text-muted">These items update automatically based on your daily logs and targets.</p>
+            <ul className="space-y-2">
+              {automaticStates.map(({ item, checked }) => {
+                const on = checked;
+                return (
+                  <li key={item.id}>
+                    <ChecklistButton item={item} checked={on} futureDate={futureDate} hint={hints[item.id]} toggleCheck={toggleCheck} date={date} />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {manualStates.length > 0 && (
+          <section className="mt-4" aria-labelledby="manual-checklist-heading">
+            <h3 id="manual-checklist-heading" className="mb-2 font-semibold">Manual</h3>
+            <ul className="space-y-2">
+              {manualStates.map(({ item, checked }) => {
+                const on = checked;
+                return (
+                  <li key={item.id}>
+                    <ChecklistButton item={item} checked={on} futureDate={futureDate} hint={hints[item.id]} toggleCheck={toggleCheck} date={date} />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -145,20 +159,25 @@ export default function Daily() {
           <p className="mt-2 text-sm text-muted">
             {fmt(Math.min(100, ((rec.steps ?? 0) / profile.stepsTarget) * 100))}% of target
           </p>
+          {rec.steps != null && (rec.steps < 0 || rec.steps > MAX_DAILY_STEPS) && (
+            <p role="status" className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-sm text-ink">
+              This entry is outside the 0–{fmt(MAX_DAILY_STEPS)} range and is excluded from averages. Review it for a typing error.
+            </p>
+          )}
           <label className="mt-4 block">
             <span className="mb-1 block text-sm font-medium">Steps today</span>
             <Input
               type="number"
               inputMode="numeric"
               min={0}
-              max={200000}
+              max={MAX_DAILY_STEPS}
               disabled={futureDate}
               value={rec.steps ?? ''}
               placeholder="Enter total steps"
               onChange={(e) => {
                 const v = e.target.value;
                 const n = Math.round(Number(v));
-                updateDaily(date, (r) => ({ ...r, steps: v === '' ? null : Number.isFinite(n) ? Math.min(200000, Math.max(0, n)) : r.steps }));
+                updateDaily(date, (r) => ({ ...r, steps: v === '' ? null : Number.isFinite(n) ? Math.min(MAX_DAILY_STEPS, Math.max(0, n)) : r.steps }));
               }}
             />
           </label>
@@ -177,5 +196,47 @@ export default function Daily() {
         <p className="mt-1 text-xs text-muted">Everything on this page saves as you type.</p>
       </Card>
     </div>
+  );
+}
+
+function ChecklistButton({
+  item,
+  checked,
+  futureDate,
+  hint,
+  toggleCheck,
+  date,
+}: {
+  item: ChecklistItem;
+  checked: boolean;
+  futureDate: boolean;
+  hint?: string;
+  toggleCheck: (date: string, key: string) => void;
+  date: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-disabled={futureDate || Boolean(item.autoComplete)}
+      disabled={futureDate || Boolean(item.autoComplete)}
+      onClick={() => toggleCheck(date, item.id)}
+      className={cx(
+        'flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 text-left transition',
+        checked ? 'border-accent/50 bg-accent-soft' : 'border-line hover:bg-bg'
+      )}
+    >
+      <span className={cx(
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2',
+        checked ? 'border-accent bg-accent text-on-accent' : 'border-muted/50'
+      )}>
+        {checked && <Check size={18} strokeWidth={3} />}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-medium">{item.label}</span>
+        {hint && <span className="block text-xs text-muted">{hint}</span>}
+      </span>
+    </button>
   );
 }

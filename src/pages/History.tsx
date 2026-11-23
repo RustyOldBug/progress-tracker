@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { Button, Card, EmptyState, PageHeader } from '../components/ui';
-import { checkedCount, completionPct, dayTotals } from '../lib/calc';
+import { checklistProgress, dayTotals } from '../lib/calc';
 import { formatMedium } from '../lib/dates';
 import { fmt } from '../lib/format';
 import { navigate } from '../lib/router';
-import { CHECKLIST_ITEMS, routineLabel } from '../constants';
+import { MAX_DAILY_STEPS, routineLabel } from '../constants';
 
 export default function HistoryPage() {
   const { data, setSelectedDate } = useStore();
@@ -45,6 +45,14 @@ export default function HistoryPage() {
               const w = data.weights.find((x) => x.date === d);
               const t = dayTotals(data.foods, d);
               const r = data.daily[d];
+              const checklist = checklistProgress(data.checklistItems, r, {
+                calories: t.count > 0 && t.calories <= data.profile.calorieTarget,
+                protein: t.protein >= data.profile.proteinTarget,
+                steps: (r?.steps ?? 0) >= data.profile.stepsTarget && (r?.steps ?? 0) <= MAX_DAILY_STEPS,
+                water: (r?.water ?? 0) >= data.profile.waterTargetMl,
+                weighIn: Boolean(w),
+                gym: data.workouts.some((workout) => workout.date === d && workout.status === 'completed'),
+              });
               const g = data.workouts.find((x) => x.date === d);
               return (
                 <li key={d}>
@@ -52,7 +60,7 @@ export default function HistoryPage() {
                     <div className="flex items-baseline justify-between gap-3">
                       <h2 className="font-display text-lg font-semibold">{formatMedium(d)}</h2>
                       <span className="text-sm tabular-nums text-muted">
-                        {r ? `${checkedCount(r)} / ${CHECKLIST_ITEMS.length} checklist · ${fmt(completionPct(r))}%` : 'No checklist'}
+                        {r || t.count || w ? `${checklist.checked} / ${checklist.total} checklist · ${fmt(checklist.percent)}%` : 'No checklist'}
                       </span>
                     </div>
                     <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3 md:grid-cols-6">

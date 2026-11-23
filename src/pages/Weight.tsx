@@ -18,6 +18,10 @@ export default function Weight() {
   const [notes, setNotes] = useState(() => initialEntry?.notes ?? '');
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const lastToday = useRef(todayISO());
+  const selectedDate = useRef(date);
+  const weightsRef = useRef(data.weights);
+  weightsRef.current = data.weights;
+  const historyContent = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const refreshToday = () => {
@@ -25,7 +29,15 @@ export default function Weight() {
       if (currentToday === lastToday.current) return;
       const previousToday = lastToday.current;
       lastToday.current = currentToday;
-      setDate((current) => current === previousToday ? currentToday : current);
+      if (selectedDate.current === previousToday) {
+        const entry = weightsRef.current.find((weightEntry) => weightEntry.date === currentToday);
+        selectedDate.current = currentToday;
+        setDate(currentToday);
+        setWeight(entry ? String(entry.weight) : '');
+        setWaist(entry?.waist != null ? String(entry.waist) : '');
+        setNotes(entry?.notes ?? '');
+        setMsg(null);
+      }
     };
     const interval = window.setInterval(refreshToday, 60_000);
     window.addEventListener('focus', refreshToday);
@@ -46,6 +58,7 @@ export default function Weight() {
   const weekly = avgWeeklyChange(data.weights);
 
   const load = (d: string, preserveDraftForEmptyDate = false) => {
+    selectedDate.current = d;
     setDate(d);
     const e = data.weights.find((w) => w.date === d);
     if (e) {
@@ -131,12 +144,19 @@ export default function Weight() {
       </Card>
 
       <Card>
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between font-display text-lg font-semibold marker:hidden">
+        <details
+          className="group"
+          onToggle={(event) => {
+            if (event.currentTarget.open) {
+              requestAnimationFrame(() => historyContent.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+            }
+          }}
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg font-display text-lg font-semibold marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
             <span>History <span className="ml-1 text-sm font-normal text-muted">({rows.length})</span></span>
             <ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180" />
           </summary>
-          <div className="mt-3">
+          <div ref={historyContent} className="mt-3 scroll-mt-4">
             {rows.length === 0 ? (
               <EmptyState title="No weigh-ins yet" hint="Your entries will be listed here, newest first." />
             ) : (

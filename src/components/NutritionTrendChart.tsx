@@ -95,19 +95,20 @@ export default function NutritionTrendChart({
         <EmptyState title="No nutrition entries in this range" hint="Log food to start seeing daily calorie and protein patterns." />
       ) : (
         <>
-          <div className="mb-3 grid grid-cols-2 gap-3 text-sm sm:max-w-md">
+          <div className="mb-1 grid grid-cols-2 gap-3 text-sm sm:max-w-md">
             <div className="rounded-xl bg-bg p-3">
-              <p className="text-muted">Avg. cal / day</p>
+              <p className="text-muted">Avg. cal / logged day</p>
               <p className="font-semibold tabular-nums">{fmt(caloriesAverage ?? 0)} kcal</p>
             </div>
             <div className="rounded-xl bg-bg p-3">
               <p className="text-muted">
                 <span className="sm:hidden">Avg. prot. / day</span>
-                <span className="hidden sm:inline">Avg. protein / day</span>
+                <span className="hidden sm:inline">Avg. protein / logged day</span>
               </p>
               <p className="font-semibold tabular-nums">{fmt(proteinAverage ?? 0, 1)} g</p>
             </div>
           </div>
+          <p className="mb-3 text-xs text-muted">Averages use days with food logged ({points.length} {points.length === 1 ? 'day' : 'days'}).</p>
           <div className="mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
             <span className="flex items-center gap-1.5">
               <span className="w-5 border-t-2 border-dashed border-warn" />
